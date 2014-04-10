@@ -1,0 +1,180 @@
+This file is a list of known text errors for the book "Introduction to
+Compiling Techniques: A First Course Using ANSI C, LEX and YACC" by J P
+Bennett, published by McGraw-Hill. Where appropriate I have credited the first
+known detector of the error.
+
+15 Sep 1992:  (J P Bennett). Figure 3.1, page 31. The last "x" on the diagram
+              (not the caption) should be "z".
+
+16 Oct 1992:  (Mark Knight). Figure 3.1, page 31. The second line of the
+              diagram, the "S" should be "B".
+
+ 2 Nov 1992:  (Mark Knight). Figure 3.7, page 39. The text of the annotations
+              for (a) and (b) should be exchanged.
+
+23 Nov 1992:  (Steve Preddy, UAE). Figure 3.2, Page 32. From the top of the
+              parse tree take the path: program; function list; function;
+              statement; if statement; (leftmost) statement; return statement.
+              The next bit of the tree should look like:
+
+                                     |
+
+                                expression      
+
+        
+                            /        |        \
+
+
+                expression     binary_operator   expression
+
+                     |               |            /   |   \
+                                     *             
+                    etc.                             etc.
+
+23 Nov 1992:  (Steve Preddy, UAE). Figure 4.7, Page 57. The variables pointed
+              to by the TAC_PLUS triple should both be t1 and not t1 and t2 as
+              shown.
+
+11 Mar 1993:  (Atanas Radenski, Southwest Minnesota State University). The
+              example on page 120 contains three errors:
+
+                { printf( "%n vars\n", $$); } 
+                              ^           ^
+              should be
+
+                { printf( "%d vars\n", $1); }
+
+              and
+
+                { $$ = $1 + $2 ; /* Add the totals */ }
+                       ^
+              should be
+
+                { $$ =  1 + $2 ; /* Add the totals */ }
+
+              On table 5.4, page 74, the expression
+
+                x\*
+
+              should be
+     
+                \x*
+
+              The example on page 61 specifying <integer> is confusing. The
+              reader would expect that the small grammar there is a type 3
+              grammar, as the book implies. On the other end, it is NOT a type
+              3 grammar according to the definition on page 34. A type 3
+              grammar as given in the definition would be:
+
+                integer ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+                            0 integer | 1 integer | 2 integer | 3 integer
+                            4 integer | 5 integer | 6 integer | 7 integer
+                            8 integer | 9 integer
+
+30 Mar 1993:  (Tom Rushton, Durham University). The second example on page 132
+              should be:
+
+                 i = (int)a ;
+
+              This is a proper example of information loss.
+
+10 Apr 1993:  (Rosemary M C Lau, Bradford University). The index gives page 24
+              as the reference for context-free and context-sensitive grammars.
+              This should be page 34.
+
+10 Apr 1993:  (Rosemary M C Lau, Bradford University). Figure 3.3b, page 35
+              incorrect. It should be:
+
+                        A
+                       / \
+                      /   B
+                     /   / \
+                    /   /   B
+                   /   /   / \
+                  /   /   /   B
+                 /   /   /     \
+                y   x   x      eps
+
+10 Apr 1993:  (Rosemary M C Lau, Bradford University). The caption for figure
+              3.6 should be "Parse tree for uvv using ..." 
+
+ 5 May 1993:  (Rosemary M C Lau, Bradford University). Page 54 has a
+              typographical error in the last piece of C code on the page. This
+              should read:
+
+                 struct tac
+                 {
+                         int             op ;
+                         struct symbtab *a ;
+                         struct symbtab *b ;
+                         struct symbtab *c ;
+                 }
+
+10 Apr 1993:  (D L Mountain, Bradford University). The FSM on page 73 (
+              combined from the two shown on page 72) in fig 5.7c contains the
+              following mistakes:
+
+                The arrow from state 'NOT A VARIABLE OR INTEGER' to state 'NOT
+                AN INTEGER' is the wrong way round and should be reversed.
+
+                The state 'NOT AN INTEGER' should be labelled 'IS AN INTEGER'.
+
+28 May 1993:  (Rosemary M C Lau, Bradford University). The reference to yylval
+              in the comment in line 54 of main.c should refer to yyval. There
+              is no need to give the type of yylval, since it is defined in
+              parser.h
+
+ 4 Jun 1993:  (Rosemary M C Lau, Bradford University). In the index on page
+              242, the reference to YACC in the index should be from pg 117 to
+              128, and not 177-128 as shown.
+
+17 Jan 1994:  (Jeremy Bennett, jpb=compiler-bugs@maths.bath.ac.uk). The files
+              are now available by anonymous FTP from axiom.maths.bath.ac.uk in
+              the directory pub/comp-tech/jpb-book.
+
+18 Jan 1994:  (Jamie Roots, Bath University). The comment on page 214 at the
+              top of cg_arg is ambiguous. For clarity it should read "... We
+              load the argument into a register, and then write it onto the new
+              stack frame, which is two words past the current top of stack..."
+
+ 2 Feb 1994:  (Ken Macfarlane, Paisley University, ktm@cs.paisley.ac.uk). The
+              short VSL program on p129 has semi-colons at the end of each
+              statement. These should be omitted.
+
+25 Nov 1994:  (Jeremy Bennett, jpb=compiler-bugs@maths.bath.ac.uk). Third
+              sentence on page 96 is wrong. It should read "We then output
+              X -> ubar, and push G[s',X] as the new state on the top of the
+              stack."
+
+25 Nov 1994:  (Jeremy Bennett, jpb=compiler-bugs@maths.bath.ac.uk). Step 2 for
+              creating the family of configurating sets on page 102 is wrong.
+              It should end "add succ(C,X) to F", not "add C to F".
+
+11 May 2001:  (John Dance, dance@be.com). There appears to be a bug on page
+              70-71 of your book (second edition).
+
+              yytext[0] = ch ;
+              .
+              for ( i = 0 ; isupper(ch = getchar()) ; yytext[i++] = ch )
+                      ;
+              .
+              yytext[i++] = 0;
+              .
+              .
+              return lookup_reserved( yytext );
+
+              The second character of the keyword will over write the first
+              since yytext[0] is written explicitly and then yytext[0] is
+              written again at the end of the for loop. Changing the
+              initialization of i to 1 will fix this.  Or changing the post-
+              increment to a pre-increment both in the loop and in the setting
+              of EOS would also work.
+
+
+Happy programming. Further corrections to jpb=compiler-bugs please.
+
+Jeremy Bennett                          Tel:   +44 225 826891
+School of Mathematical Sciences         Telex: 449097 UOBATH G
+University of Bath                      Fax:   +44 225 62508 (Group 3)
+Bath, BA2 7AY, England                  Email: jpb@maths.bath.ac.uk
+

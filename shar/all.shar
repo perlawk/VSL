@@ -1,0 +1,4528 @@
+
+# This is a shell archive.  Remove anything before this line, then
+# unpack it by saving it in a file and typing "sh file".  (Files
+# unpacked will be owned by you and have default permissions.)
+#
+# This archive contains:
+# BUGS
+# HELP
+# INDEX
+# Makefile-vam
+# Makefile-vas
+# Makefile-vc
+# README
+# cg.c
+# header
+# lib
+# main.c
+# parser.y
+# scanner.l
+# vam.c
+# vam.doc
+# vas.y
+# vc.h
+
+echo x - BUGS
+mv BUGS BUGS.old
+cat > "BUGS" << '//E*O*F BUGS//'
+This file is a list of known bugs in the VSL system. It documents changes that
+have been made to the listing as given in the book. I have credited the first
+known detector of the bug.
+
+13 Jun 1990:  (R C Shaw, Praxis Systems). The function cg() on p209, refers to
+              "header" and "lib" in the calls to cg_sys. These files must thus
+              be in the directory in which the compiler is run. The compiler is
+              now modified to #define LIB_DIR in vc.h, being the name of the
+              directory in which to find these files. The calls to cg_sys have
+              been changed to use LIB_DIR in cg.c.
+
+13 Jun 1990:  The function mklabel in main.c failed to return a result. The
+              line:
+
+                 return t ;
+
+              has been added to fix this.
+
+14 Jun 1990:  (Alan Barnes, Aston University). The automatic distribution
+              program had a mistake in its Awk script. This meant it may not
+              have worked with some mailers, in particular VAX VMS machines.
+              Now fixed.
+
+ 3 May 1991:  (Jonathan Johnson, johnsonj@mathcs.carleton.edu). The function
+              fib(n) on page 169 does not generate Fibonacci numbers. A correct
+              version would be:
+
+                 FUNC fib( n )
+                 {
+                   VAR i, l1, l2
+                 
+                   i  := 2
+                   l1 := 1
+                   l2 := 1
+                 
+                   IF n - 1
+                   THEN
+                   {
+                     WHILE n - i
+                     DO
+                     {
+                       VAR t
+                 
+                       t  := l1
+                       l1 := l2
+                       l2 := l1 + t
+                       i  := i + 1
+                     }
+                     DONE
+                     RETURN l2
+                   }
+                   ELSE
+                     RETURN 1
+                   FI
+                 }
+
+ 3 May 1991:  (Jonathan Johnson, johnsonj@mathcs.carleton.edu). The search
+              loops in cg_cond and load_reg (which it calls) conflict and may
+              end up loading a special register which appears to match. The
+              solution adopted is just to load the register into itself
+              straightway.
+
+ 3 May 1991:  (Jonathan Johnson, johnsonj@mathcs.carleton.edu and Ken
+              Schweller, Buena Vista College). mktmp( void ) creates a new
+              temporary name, using yytext and yylval. Unfortunately at this
+              stage, yylval may still hold a value yet to be shifted onto the
+              stack, and under these circumstances the wrong item (viz the new
+              temporary variable) may be shifted. One solution is not to use
+              yylval at all (Ken Schweller), the other is to save and restore
+              it (Jonathan Johnson). I have adopted the latter approach. Note
+              that the destruction of yytext is not something we need worry
+              about.
+
+ 3 May 1991:  (Jonathan Johnson, johnsonj@mathcs.carleton.edu, Michael
+              Haberler, University of Economics and Business Administration,
+              Vienna and Richard Tearle, Hatfield). fprintf is missing its
+              first argument in four places in vam.c. Now corrected.
+
+ 3 May 1991:  (Richard Tearle, Hatfield). The documentation for the TRAP
+              instruction in vam.doc referred to printing our R0, rather than
+              R15. This has been changed, so vam.doc is consistent with the
+              book and code.
+
+ 9 May 1991:  (Jeremy Bennett). Declaration of malloc changed to char* for
+              pre-ANSI versions of YACC, which declare it as such.
+
+ 9 May 1991:  (Jeremy Bennett). Character constant '"' changed to '\"' for ANSI
+              consistency in vas.y.
+
+Happy programming. Bug reports to jpb=compiler-bugs please.
+
+Jeremy Bennett                          Tel:   +44 225 826891
+School of Mathematical Sciences         Telex: 449097 UOBATH G
+University of Bath                      Fax:   +44 225 62508 (Group 3)
+Bath, BA2 7AY, England                  Email: jpb@maths.bath.ac.uk
+//E*O*F BUGS//
+
+echo x - HELP
+mv HELP HELP.old
+cat > "HELP" << '//E*O*F HELP//'
+		 Obtaining the VC compiler by Electronic Mail
+		 ============================================
+
+To obtain files for the vc compiler for VSL, the vas assembler or the VAM
+interpreter send a message to jpb=compiler-request@uk.ac.bath.maths or
+jpb=cr@uk.ac.bath.maths. The body of the message should have the following
+format:
+
+   <one or more commmands>
+   end:
+
+Possible commands are as follows
+
+help:
+
+   This will send this help file
+
+index:
+
+   This will send a list of the files available and their sizes
+
+send: <filename>
+
+   This will send the named file. If no file is specified, or the filename
+   given is "all", all files in the directory will be sent. If you want two or
+   more specific files, use two or more send: commands.
+
+path: <pathname>
+
+   This is a return address to which any subsequent files will be sent. If it
+   is not present files will be sent to the address in the Reply-To: field of
+   the message, or failing that the From: field. It makes sense to have this as
+   the first command in the message.
+
+If you have problems try sending a message, detailing the problem, to
+jpb=compiler-bugs@uk.ac.bath.maths.
+
+Files are supplied strictly on an "as is" basis. I am always pleased to hear
+about bugs and suggested improvements, but make no promises about fixing them.
+Please send any comments/questions you may have electronically to
+jpb=compiler-bugs@uk.ac.bath.maths
+
+Happy programming,
+
+Jeremy Bennett                          Tel:   (0225) 826891
+School of Mathematical Sciences         Telex: 449097 UOBATH G
+University of Bath                      Fax:   (0225) 826492 (Group 3)
+Bath, BA2 7AY                           Email: jpb@uk.ac.bath.maths
+//E*O*F HELP//
+
+echo x - INDEX
+mv INDEX INDEX.old
+cat > "INDEX" << '//E*O*F INDEX//'
+Files available:
+================
+
+ Size    Name
+(bytes)
+
+ 4150    BUGS
+ 1679    HELP
+  339    INDEX
+  564    Makefile-vam
+  558    Makefile-vas
+  845    Makefile-vc
+ 2588    README
+20414    cg.c
+  165    header
+ 1735    lib
+16436    main.c
+22010    parser.y
+ 6320    scanner.l
+14309    vam.c
+ 4469    vam.doc
+ 9230    vas.y
+ 9300    vc.h
+//E*O*F INDEX//
+
+echo x - Makefile-vam
+mv Makefile-vam Makefile-vam.old
+cat > "Makefile-vam" << '//E*O*F Makefile-vam//'
+#
+# A Makefile for the VAM simulator. Note that on many systems the use of the
+# pedantic flag on the compiler will cause many warnings, since the included
+# system files are unlikely to be ANSI
+#
+
+# How to compile with gcc
+
+.c.o:
+	gcc -c $(CFLAGS) $*.c
+
+# Flags
+
+CFLAGS = -g -ansi -pedantic
+
+# The files involved
+
+SRCS = vam.c
+
+OBJS = vam.o
+
+# Create a new assembler
+
+vam: $(OBJS)
+	gcc $(CFLAGS) $(OBJS) -ll -o vam
+
+# Print out the source files
+
+print:
+	enscript -2rh $(SRCS)
+
+# Profile option to see what's happening
+
+profile:
+	gcc -p $(SRCS) -ll -o profile-vam
+//E*O*F Makefile-vam//
+
+echo x - Makefile-vas
+mv Makefile-vas Makefile-vas.old
+cat > "Makefile-vas" << '//E*O*F Makefile-vas//'
+#
+# A Makefile for the VAS assembler
+#
+
+# How to compile with gcc
+
+.c.o:
+	gcc -c $(CFLAGS) $*.c
+
+# Flags
+
+CFLAGS = -g -ansi -pedantic
+
+# The files involved
+
+HDRS = vas.h
+
+SRCS = vas.c
+
+OBJS = vas.o
+
+# Create a new assembler
+
+vas: $(OBJS)
+	gcc $(CFLAGS) $(OBJS) -ll -o vas
+
+# C dependencies
+
+$(OBJS): $(HDRS)
+
+# Dependencies of YACC files
+
+vas.c vas.h: vas.y
+	yacc -d vas.y
+	mv y.tab.c vas.c
+	mv y.tab.h vas.h
+
+
+# Print out the source files
+
+print:
+	enscript -2rh $(SRCS)
+
+# Profile option to see what's happening
+
+profile:
+	gcc -p $(SRCS) -ll -o profile-vas
+//E*O*F Makefile-vas//
+
+echo x - Makefile-vc
+mv Makefile-vc Makefile-vc.old
+cat > "Makefile-vc" << '//E*O*F Makefile-vc//'
+#
+# A Makefile for the simple VSL compiler
+#
+
+# How to compile with gcc
+
+.c.o:
+	gcc -c $(CFLAGS) $*.c
+
+# Flags
+
+CFLAGS = -g -ansi -pedantic
+
+# The files involved
+
+HDRS = vc.h
+
+CSRCS = main.c \
+        cg.c
+
+SRCS = $(CSRCS) \
+       scanner.c \
+       parser.c
+
+OBJS = main.o \
+       parser.o \
+       scanner.o \
+       cg.o
+
+# Create a new compiler
+
+vc: $(OBJS)
+	gcc $(CFLAGS) $(OBJS) -ll -o vc
+
+# C dependencies
+
+$(OBJS): $(HDRS)
+
+main.o: parser.h
+
+# Dependencies of LEX and YACC files
+
+scanner.c: scanner.l
+	lex scanner.l
+	mv lex.yy.c scanner.c
+
+scanner.o: scanner.c parser.h
+
+parser.c parser.h: parser.y
+	yacc -d parser.y
+	mv y.tab.c parser.c
+	mv y.tab.h parser.h
+
+
+# Print out the source files
+
+print:
+	enscript -2rh $(HDRS) scanner.l parser.y $(CSRCS)
+
+# Profile option to see what's happening
+
+profile:
+	gcc -p $(SRCS) -ll -o profile-vc
+//E*O*F Makefile-vc//
+
+echo x - README
+mv README README.old
+cat > "README" << '//E*O*F README//'
+This is the distribution directory with the source files for the vc compiler
+for VSL, the vas assembler and the VAM interpreter. A make file is provided for
+each of these systems, so for example to make the vc compiler use the command
+
+   make -f Makefile-vc
+
+All three make files assume the use of an ANSI C compiler. I have used the GNU
+C compiler, gcc, on a SUN-4/260 in developing this system. You may need to edit
+the make files if you are using a different compiler (change all occurrences of
+gcc to the name of your compiler).
+
+The vc code generator picks up standard prologue and library files. The
+directory where these are found is set by the line
+
+   #define  LIB_DIR  "/home/jpb/book/distrib/"  /* Library directory */
+
+in vc.h. This should be modified to refer to the directory with the vc source.
+Note the / at the end.
+
+Finally some ANSI compilers are likely to need #include <stdlib.h> in
+appropriate places.
+
+The files in this directory are as follows:
+
+BUGS             Reported bugs
+HELP             Instructions on how to obtain these files by Email
+INDEX            Index of files available
+Makefile-vam     Make file for the VAM interpreter
+Makefile-vas     Make file for the vas assembler
+Makefile-vc      Make file for the vc compiler
+README           This file
+cg.c             ANSI C code generator for the vc compiler
+header           VAM Header for compiled VSL
+lib              VAM Library for compiled VSL
+main.c           ANSI C driver routines for the vc compiler
+parser.y         YACC parser for the vc compiler
+scanner.l        LEX scanner for the vc compiler
+vam.c            ANSI C source for the VAM interpreter
+vam.doc          Documentation for the VAM interpreter
+vas.y            YACC source for the VAS assembler
+vc.h             C Header for the vc compiler
+
+These files are available in the UK by Email from the School of Mathematical
+Sciences at Bath University. To find out how to obtain them send a message to
+jpb=compiler-request@uk.ac.bath.maths with two lines as follows:
+
+   help:
+   end:
+
+These files are supplied strictly on an "as is" basis. I am always pleased to
+hear about bugs and suggested improvements, but make no promises about fixing
+them. Please send any comments/questions you may have electronically to
+jpb=compiler-bugs@uk.ac.bath.maths
+
+Happy programming,
+
+Jeremy Bennett                          Tel:   (0225) 826891
+School of Mathematical Sciences         Telex: 449097 UOBATH G
+University of Bath                      Fax:   (0225) 826492 (Group 3)
+Bath, BA2 7AY                           Email: jpb@uk.ac.bath.maths
+//E*O*F README//
+
+echo x - cg.c
+mv cg.c cg.c.old
+cat > "cg.c" << '//E*O*F cg.c//'
+/******************************************************************************
+*******************************************************************************
+
+
+                                CCCCC    GGGGGG 
+                               CCCCCCC  GGGGGGGG
+                              CC        GG      
+                              CC        GG  GGGG
+                              CC        GG    GG
+                              CC        GG    GG
+                               CCCCCCC  GGGGGGGG
+                                CCCCC    GGGGGG 
+
+
+*******************************************************************************
+*******************************************************************************
+
+			      A Compiler for VSL
+			      ==================
+
+   This is the code generator section
+
+   Modifications:
+   ==============
+
+   22 Nov 88 JPB:  First version
+   26 Apr 89 JPB:  Version for publication
+    1 Aug 89 JPB:  Final version for publication
+   13 Jun 90 JPB:  Now refers to library directory (noted by R C Shaw, Praxis).
+    9 May 91 JPB:  load_reg call in cg_cond removed to avoid conflict (J
+                   Johnson)
+
+*******************************************************************************
+******************************************************************************/
+
+
+#include <stdio.h>
+#include <ctype.h>
+#include "vc.h"
+
+/* Constants used here. First we define some of the registers. We reserve
+   register R1 as the stack pointer and use registers R2 - R4 in the calling
+   and return sequences. */
+
+#define R_ZERO          0		 /* Constant zero */
+#define R_P             1		 /* Stack pointer */
+#define R_CALL          2		 /* Address of called routine */
+#define R_RET           3		 /* Return address */
+#define R_RES           4		 /* Result reg and last reserved */
+#define R_GEN           5		 /* First general purpose register */
+#define R_MAX          16		 /* 16 regs */
+
+/* The stack frame holds the dynamic link at offset zero and the return address
+   at offset 4. */
+
+#define P_OFF           0                /* Offset of stack pointer on frame */
+#define PC_OFF          4                /* Offset of ret address on frame */
+#define VAR_OFF         8                /* Offset of variables on frame */
+
+/* To make the code clearer we define flags MODIFIED and UNMODIFIED as TRUE and
+   FALSE respectively for setting the mod field of the register descriptor. */
+
+#define MODIFIED     TRUE		 /* Entries for descriptors */
+#define UNMODIFIED  FALSE
+
+/* These are static variables used throughout this section. The register
+   descriptor is an array of anonymous structures with a field to hold the most
+   recent item slaved in the register and a field to mark whether the register
+   has been modified since last written to memory.
+
+   "tos" is the top of stack in the current function and "next_arg" is the
+   number of the next argument to load on the stack. */
+
+struct			 		 /* Reg descriptor */
+{
+	struct symb *name ;		 /* Thing in reg */
+	int          modified ;		 /* If needs spilling */
+}    rdesc[R_MAX] ;
+int  tos ;				 /* Top of stack */
+int  next_arg ;				 /* Next argument to load */
+
+/* These are the prototypes of routines defined here. Routines to translate TAC
+   instructions generally have the form "cg_xxx()" where xxx is the name of a
+   TAC instruction of group of TAC instructions. */
+
+void  cg( TAC *tl ) ;
+TAC  *init_cg( TAC *tl ) ;
+void  cg_instr( TAC *c ) ;
+void  cg_bin( char *op,
+	      SYMB *a,
+	      SYMB *b,
+	      SYMB *c ) ;
+void  cg_copy( SYMB *a,
+	       SYMB *b ) ;
+void  cg_cond( char *op,
+	       SYMB *a,
+	       int   l ) ;
+void  cg_arg( SYMB *a ) ;
+void  cg_call( int   f,
+	       SYMB *res ) ;
+void  cg_return( SYMB *a ) ;
+void  cg_sys( char *fn ) ;
+void  cg_strings( void ) ;
+void  cg_str( SYMB *s ) ;
+void  flush_all( void ) ;
+void  spill_all( void ) ;
+void  spill_one( int  r ) ;
+void  load_reg( int   r,
+		SYMB *n ) ;
+void  clear_desc( int   r ) ;
+void  insert_desc( int   r,
+		   SYMB *n,
+		   int   mod ) ;
+int   get_rreg( SYMB *c ) ;
+int   get_areg( SYMB *b,
+	       int   cr ) ;
+
+
+void  cg( TAC *tl )
+
+/* The code generator is initialised by "cg_init()", finding the start of the
+   TAC list in the process (since the syntax analysis phase has given us the
+   end of the list, and the code generator works from the start of the list).
+
+   We first copy a header file to the output containing initialisation code and
+   then loop generating code for each TAC instruction. The code is preceded by
+   a comment line in the assembler giving the TAC instruction being translated.
+   After generating code for the TAC, we copy the library file and then
+   generate code for all the text strings used in the program.
+
+   Note that in the book the header and lib files are just referred to as
+   "header" and "lib", thus assuming that they will be in the same directory
+   that the compiler is run in. We have included a #defined library path here
+   for greater flexibility. */
+
+{
+	TAC *tls = init_cg( tl ) ;              /* Start of TAC */
+
+	cg_sys( LIB_DIR "header" ) ;		 /* Standard header */
+
+	for( ; tls != NULL ; tls = tls->next )  /* Instructions in turn */
+	{
+		printf( "\\ " ) ;
+		print_instr( tls ) ;
+		cg_instr( tls ) ;
+	}
+
+	cg_sys( LIB_DIR "lib" ) ;		 /* Library */
+	cg_strings() ;				 /* String data */
+
+}	/* void  cg( TAC *tl ) */
+
+
+TAC *init_cg( TAC *tl )
+
+/* Initialisation involves clearing the register descriptors (apart from zero
+   in R0), setting the top of stack and next_arg indices and clearing the free
+   lists for address and register descriptors. We finally find the end of the
+   TAC list, setting .cb next fields in the TAC as we do so. */
+
+{
+	int  r ;
+        TAC *c ;			 /* Current TAC instruction */
+	TAC *p ;			 /* Previous TAC instruction */
+
+	for( r = 0 ; r < R_MAX ; r++ )
+		rdesc[r].name = NULL ;
+
+	insert_desc( 0, mkconst( 0 ), UNMODIFIED ) ;	 /* R0 holds 0 */
+
+	tos      = VAR_OFF ; 		 /* TOS allows space for link info */
+	next_arg = 0 ;			 /* Next arg to load */
+
+	/* Tidy up and reverse the code list */
+
+	c = NULL ;			 /* No current */
+	p = tl ;			 /* Preceding to do */
+
+	while( p != NULL )
+	{
+		p->next = c ;		 /* Set the next field */
+		c       = p ;		 /* Step on */
+		p       = p->prev ;
+	}
+
+	return c ;
+
+}	/* TAC *init_cg( TAC *tl ) */
+
+
+void  cg_instr( TAC *c )
+
+/* Generate code for a single TAC instruction. This is just a switch on all
+   possible TAC instructions. Hopefully if we have written the front end
+   correctly the default case will never be encountered. For most cases we just
+   call a subsidiary routine "cg_xxx()" to do the code generation. */
+
+{
+	switch( c->op )
+	{
+	case TAC_UNDEF:
+
+		error( "cannot translate TAC_UNDEF" ) ;
+		return ;
+
+	case TAC_ADD:
+
+		cg_bin( "ADD", c->VA, c->VB, c->VC ) ;
+		return ;
+
+	case TAC_SUB:
+
+		cg_bin( "SUB", c->VA, c->VB, c->VC ) ;
+		return ;
+
+	case TAC_MUL:
+
+		cg_bin( "MUL", c->VA, c->VB, c->VC ) ;
+		return ;
+
+	case TAC_DIV:
+
+		cg_bin( "DIV", c->VA, c->VB, c->VC ) ;
+		return ;
+
+	case TAC_NEG:
+
+		cg_bin( "SUB", c->VA, mkconst( 0 ), c->VB ) ;
+		return ;
+
+	case TAC_COPY:
+
+		cg_copy( c->VA, c->VB ) ;
+		return ;
+
+	case TAC_GOTO:
+
+		cg_cond( "BRA", NULL, c->LA->VA->VAL1 ) ;
+		return ;
+
+	case TAC_IFZ:
+
+		cg_cond( "BZE", c->VB, c->LA->VA->VAL1 ) ;
+		return ;
+
+	case TAC_IFNZ:
+
+		cg_cond( "BNZ", c->VB, c->LA->VA->VAL1 ) ;
+		return ;
+
+	case TAC_ARG:
+
+		cg_arg( c->VA ) ;
+		return ;
+
+	case TAC_CALL:
+
+		cg_call( c->LB->VA->VAL1, c->VA ) ;
+		return ;
+
+	case TAC_RETURN:
+
+		cg_return( c->VA ) ;
+		return ;
+
+	case TAC_LABEL:
+
+		/* We generate an appropriate label. Note that we must flush
+ 		   the register descriptor, since control may arrive at this
+		   label from other points in the code. */
+
+		flush_all() ;
+		printf( "L%d:\n", c->VA->VAL1 ) ;
+		return ;
+
+	case TAC_VAR:
+
+		/* Allocate 4 bytes for this variable to hold an integer on the
+		   current top of stack */
+
+		c->VA->ADDR2 = tos ;
+		tos += 4 ;
+		return ;
+
+	case TAC_BEGINFUNC:
+
+		/* At the start of a function we must copy the return address
+		   which will be in R_RET onto the stack. We reset the top of
+		   stack, since it is currently empty apart from the link
+		   information. */
+
+		tos = VAR_OFF ;
+		printf( "       STI  R%d,%d(R%d)\n", R_RET, PC_OFF, R_P ) ;
+		return ;
+
+	case TAC_ENDFUNC:
+
+		/* At the end of the function we put in an implicit return
+		   instruction. */
+
+		cg_return( NULL ) ;
+		return ;
+
+	default:
+
+		/* Don't know what this one is */
+
+		error( "unknown TAC opcode to translate" ) ;
+		return ;
+	}
+
+}	/* void  cg_instr( TAC *c ) */
+
+
+void  cg_bin( char *op,			 /* Opcode to use */
+	      SYMB *a,			 /* Result */
+	      SYMB *b,			 /* Operands */
+	      SYMB *c )
+
+/* Generate code for a binary operator
+
+      a := b op c
+
+   VAM has 2 address opcodes with the result going into the second operand
+
+   This is a typical code generation functions. We find and load a separate
+   register for each argument, the second argument also being used for the
+   result. We then generate the code for binary operator, updating the register
+   descriptor appropriately. */
+
+{
+	int  cr = get_rreg( c ) ;	 /* Result register */
+	int  br = get_areg( b, cr ) ;	 /* Second argument register */
+
+	printf( "       %s  R%d,R%d\n", op, br, cr ) ;
+
+	/* Delete c from the descriptors and insert a */
+
+	clear_desc( cr ) ;
+	insert_desc( cr, a, MODIFIED ) ;
+
+}	/* void  cg_bin( char *op,
+	  	         SYMB *a,
+	      		 SYMB *b,
+	      		 SYMB *c ) */
+
+
+void  cg_copy( SYMB *a,
+	       SYMB *b )
+
+/* Generate code for a copy instruction
+
+      a := b
+
+   We load b into an register, then update the descriptors to indicate that a
+   is also in that register. We need not do the store until the register is
+   spilled or flushed. */
+
+{
+	int  br = get_rreg( b ) ;   	 /* Load b into a register */
+
+	insert_desc( br, a, MODIFIED ) ; /* Indicate a is there */
+
+}	/* void  cg_copy( SYMB *a,
+		       	  SYMB *b ) */
+
+
+void  cg_cond( char *op,
+	       SYMB *a,			 /* Condition */
+	       int   l )		 /* Branch destination */
+
+/* Generate for "goto", "ifz" or "ifnz". We must spill registers before the
+   branch. In the case of unconditional goto we have no condition, and so "b"
+   is NULL. We set the condition flags if necessary by explicitly loading "a"
+   into a register to ensure the zero flag is set. A better approach would be
+   to keep track of what is in the status register, so saving this load. */
+
+{
+	spill_all() ;
+
+	if( a != NULL )
+	{
+		int  r ;
+
+		for( r = R_GEN ; r < R_MAX ; r++ )   /* Is it in reg? */
+			if( rdesc[r].name == a )
+				break ;
+
+		/* Bug fix 3/5/91 to reload into the existing register
+                   correctly. */
+
+		if( r < R_MAX )
+
+		       	/* Reload into existing reg. Don't use load_reg, since
+                           it updates rdesc */
+
+			printf( "       LDR  R%d,R%d\n", r, r ) ;
+		else
+			(void)get_rreg( a ) ;  /* Load into new register */
+	}
+
+	printf( "       %s  L%d\n", op, l ) ;   /* Branch */
+
+}	/* void  cg_cond( char *op,
+	     	          SYMB *a,
+	     		  int   l ) */
+
+
+void  cg_arg( SYMB *a )
+
+/* Generate for an ARG instruction. We load the argument into a register, and
+   then write it onto the new stack frame, which is 2 past the current top of
+   stack. We keep track of which arg this is in the global variable "next_arg".
+   We assume that ARG instructions are always followed by other ARG
+   instructions or CALL instructions. */
+
+{
+	int  r  = get_rreg( a ) ;
+
+	printf( "       STI  R%d,%d(R%d)\n", r, tos + VAR_OFF + next_arg,
+		R_P ) ;
+	next_arg += 4 ;
+
+}	/* void  cg_arg( SYMB *a ) */
+
+
+void  cg_call( int   f,
+	       SYMB *res )
+
+/* The standard call sequence is
+
+      LDA  f(R0),R2
+      STI  R1,tos(R1)
+      LDA  tos(R1),R1
+      BAL  R2,R3
+    ( STI  R4,res )
+
+   We flush out the registers prior to a call and then execute the standard
+   CALL sequence. Flushing involves spilling modified registers, and then
+   clearing the register descriptors. We use BAL to do the call, which means
+   R_RET will hold the return address on entry to the function which must be
+   saved on the stack. After the call if there is a result it will be in R_RES
+   so enter this in the descriptors.  We reset "next_arg" before the call,
+   since we know we have finished all the arguments now. */
+
+{
+	flush_all() ;
+	next_arg = 0 ;
+	printf( "       LDA  L%d,R%d\n", f, R_CALL ) ;
+	printf( "       STI  R%d,%d(R%d)\n", R_P, tos, R_P ) ;
+	printf( "       LDA  %d(R%d),R%d\n", tos, R_P, R_P ) ;
+	printf( "       BAL  R%d,R%d\n", R_CALL, R_RET ) ;
+
+	if( res != NULL )		      /* Do a result if there is one */
+		insert_desc( R_RES, res, MODIFIED ) ;
+
+}	/* void  cg_call( int   f,
+		          SYMB *res ) */
+
+
+void  cg_return( SYMB *a )
+
+/* The standard return sequence is
+
+    ( LDI  a,R4 )
+      LDI  4(R1),R2    return program counter
+      LDI  0(R1),R1    return stack pointer
+      BAL  R2,R3
+
+   If "a" is NULL we don't load anything into the result register.
+*/
+
+{
+	if( a != NULL )
+	{
+		spill_one( R_RES ) ;
+		load_reg( R_RES, a ) ;
+	}
+
+	printf( "       LDI  %d(R%d),R%d\n", PC_OFF, R_P, R_CALL ) ;	
+	printf( "       LDI  %d(R%d),R%d\n", P_OFF, R_P, R_P ) ;	
+	printf( "       BAL  R%d,R%d\n", R_CALL, R_RET ) ;	
+
+}	/* void  cg_return( SYMB *a ) */
+
+
+void  cg_sys( char *fn )		 /* File name */
+
+/* This routine is used to copy standard header and library files into the
+   generated code. */
+
+{
+	FILE *fd = fopen( fn, "r" ) ; /* The library file */
+	int  c ;
+
+	if( fd == NULL )
+	{
+		error( "cannot open system file" ) ;
+		exit( 0 ) ;
+	}
+
+	while((c = getc( fd )) != EOF )
+		putchar( c ) ;
+
+	fclose( fd ) ;
+
+}	/* void  cg_sys( char *fn ) */
+
+
+void  cg_strings( void )
+
+/* This routine runs through the symbol table at the end of code generation to
+   find all the strings, calling "cg_str()" to generate each string as a series
+   of bytes declarations. It finally generates label zero to mark the end of
+   code. */
+
+{
+	int  i ;
+
+	for( i = 0 ; i < HASHSIZE ; i++)   /* Find all symbol table chains */
+	{
+		SYMB *sl ;
+
+		for( sl = symbtab[i] ; sl != NULL ; sl = sl->next )
+			if( sl->type == T_TEXT )
+				cg_str( sl ) ;
+	}
+
+	printf( "L0:\n" ) ;
+
+}	/* void  cg_strings( void ) */
+
+
+void  cg_str( SYMB *s )
+
+/* Generate bytes for this string. Ignore the quotes and translate escapes */
+
+{
+	char *t = s->TEXT1 ;		 /* The text */
+	int   i ;
+
+	printf( "L%d:\n", s->VAL2 ) ;	 /* Label for the string */
+
+	for( i = 1 ; t[i + 1] != EOS ; i++ )
+		if( t[i] == '\\' )
+			switch( t[++i] )
+			{
+				case 'n':
+
+					printf( "       DB   %d\n", '\n' ) ;
+					break ;
+
+				case '\"':
+
+					printf( "       DB   %d\n", '\"' ) ;
+					break ;
+			}
+		else
+			printf( "       DB   %d\n", t[i] ) ;
+
+	printf( "       DB   0\n" ) ;	 /* End of string */
+
+}	/* void  cg_str( SYMB *s ) */
+
+
+/* These are the support routines for the code generation. "flush_all()' is
+   used to write all modified registers and clear the registers at points where
+   their validity can not be guaranteed (after labels and function calls).
+   "spill_all()" is used to write all modified registers at points where we
+   wish memory to be consistent (prior to a branch).  "spill_one()" is used to
+   write a specific register out if it is modified. */
+
+
+void  flush_all( void )
+
+/* Spill all registers, and clear their descriptors */
+
+{
+	int  r ;
+
+	spill_all() ;
+
+	for( r = R_GEN ; r < R_MAX ; r++ )   /* Clear the descriptors */
+		clear_desc( r ) ;
+
+}	/* void  flush_all( void ) */
+
+
+void  spill_all( void )
+
+/* Spill all the registers */
+
+{
+	int  r ;
+
+	for( r = R_GEN ; r < R_MAX ; r++ )
+		spill_one( r ) ;
+
+}	/* spill_all( void ) */
+
+
+void  spill_one( int  r )
+
+/* Spill the value in register r if it's modifed */
+
+{
+	if( rdesc[r].modified )
+	{
+		printf( "       STI  R%d,%d(R%d)\n", r, rdesc[r].name->ADDR2,
+			R_P ) ;
+		rdesc[r].modified = UNMODIFIED ;
+	}
+
+}	/* void  spill_one( int  r ) */
+
+
+void  load_reg( int   r,		 /* Register to be loaded */
+		SYMB *n )		 /* Name to load */
+
+/* "load_reg()" loads a value into a register. If the value is in a different
+   register it uses LDR. If it is a constant it uses LDA indexed off R0 and if
+   a piece of text, the address of the text is loaded with LDA. Variables are
+   loaded from the stack with LDI.
+
+   We update the register descriptor accordingly */
+
+{
+	int  s ;
+
+	/* Look for a register */
+
+	for( s = 0 ; s < R_MAX ; s++ )	
+		if( rdesc[s].name == n )
+		{
+			printf( "       LDR  R%d,R%d\n", s, r ) ;
+			insert_desc( r, n, rdesc[s].modified ) ;
+			return ;
+		}
+
+	/* Not in a reg. Load appropriately */
+
+	switch( n->type )
+	{
+	case T_INT:
+
+		printf( "       LDA  %d(R0),R%d\n", n->VAL1, r ) ;
+		break ;
+
+	case T_VAR:
+
+		printf( "       LDI  %d(R%d),R%d\n", n->ADDR2, R_P, r ) ;
+		break ;
+
+	case T_TEXT:
+
+		printf( "       LDA  L%d,R%d\n", n->VAL2, r ) ;
+		break ;
+	}
+
+	insert_desc( r, n, UNMODIFIED ) ;
+
+}	/* void  load_reg( int   r,
+			   SYMB *n ) */
+
+
+/* We have two routines to handle the register descriptor. "clear_desc()"
+   removes any slave information in a register, "insert_desc()" inserts slave
+   information. */
+
+
+void  clear_desc( int   r )		 /* Register to delete */
+
+/* Clear the descriptor for register r */
+
+{
+	rdesc[r].name = NULL ;
+
+}	/* void  clear_desc( int   r ) */
+
+
+void  insert_desc( int   r,
+		   SYMB *n,
+		   int   mod )
+
+/* Insert a descriptor entry for the given name. */
+
+{
+	rdesc[r].name     = n ;
+	rdesc[r].modified = mod ;
+
+}	/* void  insert_desc( int   r,
+		   	      SYMB *n,
+		   	      int   mod ) */
+
+
+/* These two routines implement the simple register allocation algorithm
+   described in chapter 10. "get_rreg()" gets a register that will hold an
+   operand and be overwritten by a result. "get_areg()" gets a register that
+   will hold an operand that will no be overwritten. */
+
+
+int  get_rreg( SYMB *c )
+
+/* Get a register to hold the result of the computation
+
+      a := b op c
+
+   This must initially hold c and will be overwritten with a. If c is already
+   in a register we use that, spilling it first if necessary, otherwise we
+   chose in order of preference from
+
+      An empty register
+      An unmodified register
+      A modified register
+
+   In the last case we spill the contents of the register before it is used. If
+   c is not in the given result register we load it. Clearly we cannot use R0
+   for this purpose, even if c is constant zero. We also avoid using the
+   reserved registers. Note that since c may be the same as b we must update
+   the address and register descriptors. */ 
+
+{
+	int        r ;			 /* Register for counting */
+
+	for( r = R_GEN ; r < R_MAX ; r++ )   /* Already in a register */
+		if( rdesc[r].name == c )
+		{
+			spill_one( r ) ;
+			return r ;
+		}
+
+	for( r = R_GEN ; r < R_MAX ; r++ )
+		if( rdesc[r].name == NULL )  /* Empty register */
+		{
+			load_reg( r, c ) ;
+			return r ;
+		}
+
+	for( r = R_GEN ; r < R_MAX ; r++ )
+		if( !rdesc[r].modified )     /* Unmodifed register */
+		{
+			clear_desc( r ) ;
+			load_reg( r, c ) ;
+			return r ;
+		}
+
+	spill_one( R_GEN ) ;		     /* Modified register */
+	clear_desc( R_GEN ) ;
+	load_reg( R_GEN, c ) ;
+	return R_GEN ;
+
+}	/* int  get_rreg( SYMB *c ) */
+
+
+int  get_areg( SYMB *b,
+	       int   cr )		 /* Register already holding b */
+
+/* Get a register to hold the second argument of the computation
+
+      a := b op c
+
+   This must hold b and will not be overwritten. If b is already in a register
+   we use that, otherwise we chose in order of preference from 
+
+      An empty register
+      An unmodified register
+      A modified register
+
+   In the last case we spill the contents of the register before it is used. If
+   b is not in the given argument register we load it. We can use R0 for this
+   purpose, even if b is constant zero, but we avoid using the reserved
+   registers. We may not use cr unless it already contains b. */
+
+{
+	int        r ;			 /* Register for counting */
+
+	for( r = R_ZERO ; r < R_MAX ; r++ )
+		if( rdesc[r].name == b )              /* Already in register */
+			return r ;
+
+	for( r = R_GEN ; r < R_MAX ; r++ )
+		if( rdesc[r].name == NULL )           /* Empty register */
+		{
+			load_reg( r, b ) ;
+			return r ;
+		}
+
+	for( r = R_GEN ; r < R_MAX ; r++ )
+		if( !rdesc[r].modified && (r != cr))  /* Unmodifed register */
+		{
+			clear_desc( r ) ;
+			load_reg( r, b ) ;
+			return r ;
+		}
+
+	for( r = R_GEN ; r < R_MAX ; r++ )
+		if( r != cr )		 	       /* Modified register */
+		{
+			spill_one( r ) ;
+			clear_desc( r ) ;
+			load_reg( r, b ) ;
+			return r ;
+		}
+
+}	/* int  get_areg( SYMB *b,
+	  	          int   cr ) */
+//E*O*F cg.c//
+
+echo x - header
+mv header header.old
+cat > "header" << '//E*O*F header//'
+\
+\      Standard prolog
+\
+       LDA  L0,R1			 \ Set stack pointer
+       STI  R1,0(R1)			 \ Save on stack
+       LDA  L1,R3			 \ Return address for main routine
+\
+//E*O*F header//
+
+echo x - lib
+mv lib lib.old
+cat > "lib" << '//E*O*F lib//'
+\
+\      End of run routine
+\
+L1:
+       HALT
+\
+\      Print a number recursively
+\
+L2:
+       STI  R3,4(R1)			 \ Save the return address
+       LDI  8(R1),R15			 \ Copy arg to R15
+       LDA  10(R0),R5			 \ Constant 10
+       DIV  R15,R5                       \ Non-zero if more than one digit
+       BZE  L3				 \ Branch if only 1 digit
+\
+       STI  R5,12(R1)			 \ Save on stack for later
+       STI  R5,24(R1)			 \ Copy to new stack frame
+       LDA  L2,R2			 \ Address to call
+       STI  R1,16(R1)			 \ Save stack pointer
+       LDA  16(R1),R1			 \ Increment stack pointer
+       BAL  R2,R3			 \ Call recursively
+       LDA  10(R0),R15			 \ Constant 10 in R15
+       LDI  8(R1),R5			 \ Original number
+       LDI  12(R1),R6			 \ Divided number
+       MUL  R6,R15			 \ Multiply back by 10 in R15
+       SUB  R5,R15			 \ Subtract from original for digit
+L3:
+       LDA  48(R0),R5			 \ ASCII '0' in R5
+       ADD  R5,R15			 \ Add to get desired digit in R15
+       TRAP				 \ Print the digit
+       LDI  4(R1),R2			 \ Return address in R2
+       LDI  0(R1),R1			 \ Restore stack pointer
+       BAL  R2,R3			 \ Return
+\
+\      Print a string
+\
+L4:
+       STI  R3,4(R1)			 \ Save the return address
+       LDI  8(R1),R5			 \ String pointer in R5
+       LDA  16777216(R0),R7		 \ 256 cubed for shifting 24 bits right
+L5:
+       LDI  0(R5),R6			 \ Next char in top byte  of R6
+       LDR  R7,R15			 \ Constant 256 cubed
+       DIV  R6,R15			 \ Char in R15
+       BZE  L6				 \ EOS branch to exit
+       TRAP				 \ Print the char
+       LDA  1(R5),R5			 \ Step to next char
+       BRA  L5				 \ Round again
+L6:
+       LDI  4(R1),R2			 \ Return address in R2
+       LDI  0(R1),R1			 \ Restore stack pointer
+       BAL  R2,R3			 \ Return
+\
+//E*O*F lib//
+
+echo x - main.c
+mv main.c main.c.old
+cat > "main.c" << '//E*O*F main.c//'
+/******************************************************************************
+*******************************************************************************
+
+
+                    MM    MM    AAAA    IIIIIIII  NN    NN
+                    MMM  MMM   AAAAAA   IIIIIIII  NNN   NN
+                    MMMMMMMM  AA    AA     II     NNNN  NN
+                    MM MM MM  AAAAAAAA     II     NN NN NN
+                    MM    MM  AA    AA     II     NN  NNNN
+                    MM    MM  AA    AA     II     NN  NNNN
+                    MM    MM  AA    AA  IIIIIIII  NN   NNN
+                    MM    MM  AA    AA  IIIIIIII  NN    NN
+
+
+*******************************************************************************
+*******************************************************************************
+
+			      A Compiler for VSL
+			      ==================
+
+   These are the main, initialisation, tidy up and utility routines.
+
+   Modifications:
+   ==============
+
+   22 Nov 88 JPB:  First version
+   26 Apr 89 JPB:  Version for publication
+   13 Jun 90 JPB:  mklabel fixed to return t
+    9 May 91 JPB:  mktmp fixed so as not to clobber yylval (J Johnson and K
+                   Schweller)
+
+*******************************************************************************
+******************************************************************************/
+
+/* As well as including the general header we include the header "parser.h"
+   generated by YACC, which contains definitions of all the terminals. Note
+   that this is the file "y.tab.h" obtained by running yacc with the -d option.
+   We rename it "parser.h" when building the compiler for clarity. */
+
+#include <stdio.h>
+#include <ctype.h>
+#include "vc.h"
+#include "parser.h"
+
+/* Constants used here. CONST_MAX gives the number of small integers
+   pre-intialised in the symbol table (described later). LAB_MIN is the first
+   label number to be used. Label L0 is reserved for the end of code and data
+   and L1 for the termination routine. Labels up to LAB_MIN - 1 may be used by
+   the library routines. */
+
+#define CONST_MAX  5
+#define LAB_MIN   10
+
+/* We also declare as external the text array and associated variables,
+   "yytext" , "yyleng" and "yylval" defined in the parser and scanner which we
+   will need to refer to in this section. */
+
+extern char    yytext[] ;
+extern int     yyleng ;
+extern YYSTYPE yyval ;
+
+/* We define a number of static variables used throughout the compiler. These
+   have been declared external in the header file, and are defined here. */
+
+SYMB  *symbtab[HASHSIZE] ;		 /* Symbol table */
+TAC   *library[LIB_MAX] ;		 /* Entries for library routines */
+int    next_tmp ;			 /* Count of temporaries */
+int    next_label ;			 /* Count of labels */
+
+/* These are static variables used throughout this section. "const_tab" is the
+   table of predeclared integers. "errors_found" is a flag set if the error
+   routine is ever called. We do not bother to generate code if errors are
+   found during parsing.
+
+   Symbol table and expression nodes are regularly allocated, freed and
+   reallocated. Rather than use the system routines "malloc()" and "free()"
+   directly for this, we maintain our own freelists, held in "symb_list" and
+   "enode_list". */
+
+SYMB  *const_tab[CONST_MAX] ;		 /* Small constants */
+int    errors_found ;			 /* True if we have any errors */
+SYMB  *symb_list ;			 /* Freelists */
+ENODE *enode_list ;
+
+/* Prototypes of routines defined in this section. */
+
+void   main( void ) ;
+void   init_vc( void ) ;
+SYMB  *mkconst( int  n ) ;
+SYMB  *mklabel( int  l ) ;
+SYMB  *mktmp( void ) ;
+SYMB  *get_symb( void ) ;
+void   free_symb( SYMB *s ) ;
+ENODE *get_enode( void ) ;
+void   free_enode( ENODE *e ) ;
+void  *safe_malloc( int  n ) ;
+TAC   *mktac( int   op,
+	      SYMB *a,
+	      SYMB *b,
+	      SYMB *c ) ;
+TAC   *join_tac( TAC *c1,
+	         TAC *c2 ) ;
+void   insert( SYMB *s ) ;
+int    hash( char *s ) ;
+SYMB  *lookup( char *s ) ;
+void   print_instr( TAC *i ) ;
+char  *ts( SYMB *s,
+	   char *str ) ;
+void   error( char *str ) ;
+
+
+void  main( void )
+
+/* The main program initialises the compiler, calls the syntax analyser and if
+   this runs successfuly passes the resulting TAC on for code generation. */
+
+{
+	init_vc() ;			 /* Set up things */
+
+	(void) yyparse() ;		 /* Parse */
+
+	if( !errors_found )
+		cg( yyval.tac ) ;	 /* Generate code from TAC */
+
+}	/* void  main( void ) */
+
+
+void  init_vc( void )
+
+/* Initialisation involves setting various system wide variables to sensible
+   values and clearing down the symbol table. Small constants are so common we
+   put them in the symbol table first and record their addresses in a table. We
+   do this for the integers 0 to COUNT_MAX - 1. This will permit us efficient
+   access to them throughout the compiler.
+
+   We record the entry labels for the library routines. We happen to know from
+   inspection of the library code that the entry point to PRINTN is L2 and to
+   PRINTS is L4. If we rewrite the library then we may have to change these.
+   This is really rather clumsy, and at the very least ought to be put in a
+   single table somewhere. Note that earlier we set the first label to be used
+   to L10, permitting the use of labels up to L9 for library use. */
+
+{
+	int  i ;			     /* General counter */
+
+	symb_list   = NULL ;		     /* Freelists */
+	enode_list  = NULL ;
+
+	errors_found = FALSE ;		     /* No errors found yet */
+	next_tmp     = 0 ;		     /* No temporaries used */
+	next_label   = LAB_MIN ;	     /* 10 labels reserved */
+
+	for( i = 0 ; i < HASHSIZE ; i++ )    /* Clear symbol table */
+		symbtab[i] = NULL ;
+
+	for( i = 0 ; i < CONST_MAX ; i++ )   /* Make constants */
+	{
+		SYMB *c = get_symb() ;	     /* Node for the constant */
+
+		c->type      = T_INT ;
+		c->VAL1      = i ;
+		const_tab[i] = c ;
+	}
+
+	library[LIB_PRINTN] = mktac( TAC_LABEL, mklabel( 2 ), NULL, NULL ) ;
+	library[LIB_PRINTS] = mktac( TAC_LABEL, mklabel( 4 ), NULL, NULL ) ;
+
+}	/* void  init_vc( void ) */
+
+
+/* We now have a number of routines to set up symbol table nodes of various
+   types. Memory allocation usually involves up to three routines, "mkxxx()" to
+   allocate and set up the fields of a struct of type "xxx", "get_xxx()" to
+   allocate space for the struct and "free_xxx()" to free up the space. */
+
+
+SYMB *mkconst( int  n )
+
+/* In "mkconst()" we check if the constant is one of the predefined ones, and
+   if so use it, otherwise we create a new entry for it. Note that this wastes
+   space, since we should check if we have used any constant before and return
+   a pointer to an existing node if possible. However the technique of just
+   predefining the first few constants (which make up the majority used) is
+   a good compromise that is efficient. */
+
+{
+	if((n >= 0) && (n < CONST_MAX))
+		return const_tab[n] ;
+	else
+	{
+		SYMB *c = get_symb() ;   /* Create a new node */
+
+		c->type = T_INT ;
+		c->VAL1 = n ;
+		return c ;
+	}
+
+}	/* SYMB *mkconst( int  n ) */
+
+
+SYMB *mklabel( int  l )
+
+/* Make a label node with the given value */
+
+{
+	SYMB *t = get_symb() ;
+
+	t->type = T_LABEL ;
+	t->VAL1 = l ;
+
+	return t ;
+
+}	/* SYMB *mklabel( int  l ) */
+
+
+SYMB *mktmp( void )
+
+/* Make a temporary name. This is just a var with name of the form Txxx. We
+   force a temporary name into the lexical analyser text buffer, "yytext[]" and
+   then use the lexical analyser's name allocator "mkname()".
+
+   Bug fix due to Jonathan Johnson 9/5/91:
+
+   Note that yylval may not yet have been shifted, and so we must save and
+   restore it after this routine. The destruction of yytext on the other hand
+   is not important. */
+
+{
+	SYMB *old_yylval = yylval.symb ; 	 /* Save the old yylval */
+        SYMB *tmp ;				 /* Used to restore result */
+
+	/* Make the name with mkname */
+
+	sprintf( yytext, "T%d", next_tmp++ ) ;   /* Set up text */
+	yyleng = strlen( yytext ) ;
+	mkname() ;
+	yylval.symb->type = T_VAR ;
+
+	/* Hang onto this new symbol in tmp, restore yylval.symb and return
+           tmp */ 
+
+	tmp         = yylval.symb ;
+	yylval.symb = old_yylval ;
+
+	return tmp ;
+
+}	/* SYMB *mktmp( void ) */
+
+
+SYMB *get_symb( void )
+
+/* Allocate space for a symbol table entry. Note the use of the freelist
+   "symb_list" to hold any nodes that have been returned. If none is available
+   we use "malloc()" to obtain a new node. Rather than use "malloc()" direct we
+   call our own version "safe_malloc()". This guarantees to return a valid
+   pointer (and never NULL). If store has run out and safe_malloc() cannot
+   allocate a new structure it will print an error message and exit the
+   compiler. */
+
+{
+	SYMB *t ;
+
+	if( symb_list != NULL )
+	{
+		t         = symb_list ;
+		symb_list = symb_list->next ;
+	}
+	else
+		t = (SYMB *)safe_malloc( sizeof( SYMB )) ;
+
+	return t ;
+
+}	/* SYMB *get_symb( void ) */
+
+
+void  free_symb( SYMB *s )
+
+/* This is the sister routine to "get_symb()" and just adds the symbol node to
+   the freelist for reuse. */
+
+{
+	s->next   = symb_list ;
+	symb_list = s ;
+
+}	/* void  free_symb( SYMB *s ) */
+
+
+ENODE *get_enode( void )
+
+/* Allocate for ENODE. This routine and "free_enode()" are analagous to
+   "get_symb()" and "free_symb()". */
+
+{
+	if( enode_list != NULL )
+	{
+		ENODE *expr ;
+
+		expr       = enode_list ;
+		enode_list = expr->next ;
+
+		return expr ;
+	}
+	else
+		return (ENODE *)safe_malloc( sizeof( ENODE )) ;
+
+}	/* ENODE *get_enode( void ) */
+
+
+void  free_enode( ENODE *expr )
+
+/* Return an enode for reuse */
+
+{
+	expr->next = enode_list ;
+	enode_list = expr ;
+
+}	/* void  free_enode( ENODE *expr ) */
+
+
+void *safe_malloc( int  n )
+
+/* Rather than have a test for a null pointer each time we call "malloc()" in
+   the compiler we write our own safe version, "safe_malloc()".  If memory runs
+   out there is no more we can do, and so the routine aborts the entire
+   compilation. */
+
+{
+	void *t = malloc( n ) ;
+
+	/* Check we got it */
+
+	if( t == NULL )
+	{
+		error( "malloc() failed" ) ;
+		exit( 0 ) ;
+	}
+
+	return t ;
+
+}	/* void *safe_malloc( int  n ) */
+
+
+/* A couple of routine for allocating and joining TAC lists. We need not
+   maintain a freelist for TAC, since we never free a TAC quadruple once
+   allocated. */
+
+
+TAC *mktac( int   op,			 /* Operator */
+	    SYMB *a,			 /* Result */
+	    SYMB *b,			 /* Operands */
+	    SYMB *c )
+
+/* Construct a TAC quadruple with the given fields 
+
+	a := b op c
+
+   Note the use of #defined selectors VA, VB and VC for the TAC struct. If
+   efficiency became a worry we might chose not to call "safe_malloc()" each
+   time we wanted a new qaudruple, but to allocate several at once. */
+
+{
+	TAC *t = (TAC *)safe_malloc( sizeof( TAC )) ;
+
+	t->next  = NULL ;		 /* Set these for safety */
+	t->prev  = NULL ;
+	t->op    = op ;
+	t->VA   = a ;
+	t->VB = b ;
+	t->VC = c ;
+
+	return t ;
+
+}	/* TAC *mktac( int   op,
+	    	       SYMB *a,
+	    	       SYMB *b,
+	    	       SYMB *c ) */
+
+
+TAC *join_tac( TAC *c1,
+	       TAC *c2 )
+
+/* Join two pieces of TAC together.  Remember that in the parser we always
+   refer to a TAC list by the most recently generated piece of code and so we
+   follow the prev pointer to get the preceding instructions. We will end up
+   with a pointer to a TAC list for the parser representing the code of "c1"
+   followed by that of "c2". */
+
+{
+	TAC *t ;
+
+	/* If either list is NULL return the other */
+
+	if( c1 == NULL )
+		return c2 ;
+
+	if( c2 == NULL )
+		return c1 ;
+
+	/* Run down c2, until we get to the beginning and then add c1 */
+
+	t = c2 ;
+
+	while( t->prev != NULL )
+		t = t->prev ;
+
+	t->prev = c1 ;
+	return c2 ;
+
+}	/* TAC *join_tac( TAC *c1,
+			  TAC *c2 ) */
+
+
+/* These are the symbol table routines. We have a routine, "insert()", to
+   insert a node in the symbol table (created by one of the "mkxxx()" routines)
+   and a routine, "lookup()" to find the symbol table entry, if any, for a
+   given text name. Both routines use the hashing function "hash()" described
+   in chapter 5. */
+
+
+void  insert( SYMB *s )
+
+/* Insert a new symbol in the symbol table. We hash on a text first argument */
+
+{
+	int hv = hash( s->TEXT1 ) ;
+
+	s->next = symbtab[hv] ;		 /* Insert at head */
+	symbtab[hv]  = s ;
+
+}	/* void  insert( SYMB *s ) */
+
+
+int  hash( char *s )
+
+/* Return a hashvalue from the given text. We use the bottom nybble of each
+   character ORed with the top nybble of the hashvalue so far and shifted in at
+   the bottom. This is then reduced mod the size of the hash table. Note the
+   implicit assumption that we are on a 32 bit machine. */
+
+{
+	int  hv = 0 ;
+	int  i ;
+
+	for( i = 0 ; s[i] != EOS ; i++ )
+	{
+		int  v = (hv >> 28) ^ (s[i] & 0xf) ;
+
+		hv = (hv << 4) | v ;
+	}
+
+	hv = hv & 0x7fffffff ;		 /* Ensure positive */
+	return hv % HASHSIZE ;
+
+}	/* int  hash ( char *s ) */
+
+
+SYMB *lookup( char *s )
+
+/* Lookup a name in the hashtable. Return NULL if the name is not found. */
+
+{
+	int   hv = hash( s ) ;
+	SYMB *t  = symbtab[hv] ;
+
+	while( t != NULL )		 	  /* Look for the name */
+		if( strcmp( t->TEXT1, s ) == 0 )
+			break ;
+		else
+			t = t->next ;
+
+	return t ;			 /* NULL if not found */
+
+}	/* SYMB lookup( char *s ) */
+
+
+/* We now have a couple of routines for debugging purposes. */
+
+
+void  print_instr( TAC *i )
+
+/* "print_instr()" is used to print out a TAC instruction symbolically. We use
+   it in the code generator to print each TAC instruction as a comment before
+   the code generated for it. The subsidiary routine, "ts()" is used to obtain
+   a suitable string representation of the TAC arguments. Note the clumsy
+   programming assumption that arguments can be represented in 11 characters.
+*/ 
+
+
+{
+	char sa[12] ;			 /* For text of TAC args */
+	char sb[12] ;
+	char sc[12] ;
+
+	printf( "       ", i ) ;
+
+	switch( i->op )
+	{
+	case TAC_UNDEF:
+
+		printf( "undef\n" ) ;
+		break ;
+
+	case TAC_ADD:
+
+		printf( "%s := %s + %s\n", ts( i->VA, sa ), ts( i->VB, sb ),
+			ts( i->VC, sc )) ;
+		break ;
+
+	case TAC_SUB:
+
+		printf( "%s := %s - %s\n", ts( i->VA, sa ), ts( i->VB, sb ),
+			ts( i->VC, sc )) ;
+		break ;
+
+	case TAC_MUL:
+
+		printf( "%s := %s * %s\n", ts( i->VA, sa ), ts( i->VB, sb ),
+			ts( i->VC, sc )) ;
+		break ;
+
+	case TAC_DIV:
+
+		printf( "%s := %s / %s\n", ts( i->VA, sa ), ts( i->VB, sb ),
+			ts( i->VC, sc )) ;
+		break ;
+
+	case TAC_NEG:
+
+		printf( "%s := - %s\n", ts( i->VA, sa ), ts( i->VB, sb )) ;
+		break ;
+
+	case TAC_COPY:
+
+		printf( "%s := %s\n", ts( i->VA, sa ), ts( i->VB, sb )) ;
+		break ;
+
+	case TAC_GOTO:
+
+		printf( "goto L%d\n", i->LA->VA->VAL1 ) ;
+		break ;
+
+	case TAC_IFZ:
+
+		printf( "ifz %s goto L%d\n", ts( i->VB, sb ),
+		 	i->LA->VA->VAL1 ) ;
+		break ;
+
+	case TAC_IFNZ:
+
+		printf( "ifnz %s goto L%d\n", ts( i->VB, sb ),
+			i->LA->VA->VAL1 ) ;
+		break ;
+
+	case TAC_ARG:
+
+		printf( "arg %s\n", ts( i->VA, sa )) ;
+		break ;
+
+	case TAC_CALL:
+
+		if( i->VA == NULL )
+			printf( "call L%d\n", i->LB->VA->VAL1 ) ;
+		else
+			printf( "%s = call L%d\n", ts( i->VA, sa ),
+				i->LB->VA->VAL1 ) ;
+		break ;
+
+	case TAC_RETURN:
+
+		printf( "return %s\n", ts( i->VA, sa )) ;
+		break ;
+
+	case TAC_LABEL:
+
+		printf( "label L%d\n", i->VA->VAL1 ) ;
+		break ;
+
+	case TAC_VAR:
+
+		printf( "var %s\n", ts( i->VA, sa )) ;
+		break ;
+
+	case TAC_BEGINFUNC:
+
+		printf( "beginfunc\n" ) ;
+		break ;
+
+	case TAC_ENDFUNC:
+
+		printf( "endfunc\n" ) ;
+		break ;
+
+	default:
+
+		/* Don't know what this one is */
+
+		error( "unknown TAC opcode" ) ;
+		printf( "unknown %d\n", i->op ) ;
+		break ;
+	}
+
+	fflush( stdout ) ;
+
+}	/* print_instr( i ) */
+
+
+char *ts( SYMB *s,			 /* Symbol to translate */
+	  char *str )			 /* String to put it in */
+
+/* Return the string representation of the given symbol. Permissible ones are
+   functions, vars, temporaries or constants */
+
+{
+
+	/* Check we haven't been given NULL */
+
+	if( s == NULL )
+		return "NULL" ;
+
+	/* Identify the type */
+
+	switch( s->type )
+	{
+	case T_FUNC:
+	case T_VAR:
+
+		/* Just return the name */
+
+		return s->TEXT1 ;
+
+	case T_TEXT:
+
+		/* Put the address of the text */
+
+		sprintf( str, "L%d", s->VAL2 ) ;
+		return str ;
+
+	case T_INT:
+
+		/* Convert the number to string */
+
+		sprintf( str, "%d", s->VAL1 ) ;
+		return str ;
+
+	default:
+
+		/* Unknown arg type */
+
+		error( "unknown TAC arg type" ) ;
+		return "?" ;
+	}
+
+}	/* ts( SYMB *s,
+	       char *str ) */
+
+
+void  error( char *str )
+
+/* This is a very simple error message routine. This is just prints a message
+   to the standard error stream, and sets a flag to indicate that an error has
+   occurred. If this is set at the end of parsing, then we do not carry on
+   further with code generation. */
+
+{
+	fprintf( stderr, "vc: %s\n", str ) ;
+	errors_found = TRUE ;
+
+}	/* void  error( char *str ) */
+//E*O*F main.c//
+
+echo x - parser.y
+mv parser.y parser.y.old
+cat > "parser.y" << '//E*O*F parser.y//'
+/******************************************************************************
+*******************************************************************************
+
+
+          PPPPPPP     AAAA    RRRRRRR    SSSSSS   EEEEEEEE  RRRRRRR 
+          PPPPPPPP   AAAAAA   RRRRRRRR  SSSSSSSS  EEEEEEEE  RRRRRRRR
+          PP    PP  AA    AA  RR    RR  SS        EE        RR    RR
+          PPPPPPP   AAAAAAAA  RRRRRRRR  SSSSSSS   EEEEEE    RRRRRRRR
+          PP        AA    AA  RRRRRRR         SS  EE        RRRRRRR 
+          PP        AA    AA  RR  RR          SS  EE        RR  RR  
+          PP        AA    AA  RR   RR   SSSSSSSS  EEEEEEEE  RR   RR 
+          PP        AA    AA  RR    RR   SSSSSS   EEEEEEEE  RR    RR
+
+
+*******************************************************************************
+*******************************************************************************
+
+			      A Compiler for VSL
+			      ==================
+
+   This is the YACC parser. It creates a tree representation of the program for
+   subsequent conversion to TAC.
+
+   Modifications:
+   ==============
+
+   16 Nov 88 JPB:  First version
+   26 Apr 89 JPB:  Version for publication
+   27 Jul 89 JPB:  Final version for publication
+
+*******************************************************************************
+******************************************************************************/
+
+%{
+
+/* We include the standard headers, but not "parser.h", since that will be
+   produced by YACC when the YACC program is translated. */
+
+#include <stdio.h>
+#include <ctype.h>
+#include "vc.h"
+
+/* These are the prototypes of routines defined and used in the parser */
+
+TAC   *do_program( TAC *c ) ;
+TAC   *do_func( SYMB *func,
+	      TAC  *args,
+	      TAC  *code ) ;
+TAC   *declare_var( SYMB *var ) ;
+TAC   *do_assign( SYMB  *var,
+		ENODE *expr ) ;
+ENODE *do_bin(  int    binop,
+		ENODE *expr1,
+		ENODE *expr2 ) ;
+ENODE *do_un(  int    unop,
+	       ENODE *expr ) ;
+ENODE *do_fnap( SYMB  *func,
+		ENODE *arglist ) ;
+TAC   *do_lib( int   rtn,
+	     SYMB *arg ) ;
+TAC   *do_if( ENODE *expr,
+	    TAC   *stmt ) ;
+TAC   *do_test( ENODE *expr,
+	      TAC   *stmt1,
+	      TAC   *stmt2 ) ;
+TAC   *do_while( ENODE *expr,
+	       TAC   *stmt ) ;
+ENODE *mkenode( ENODE *next,
+		SYMB  *res,
+		TAC   *code ) ;
+void  yyerror( char *str ) ;
+
+%}
+
+/* %union defines the type of attribute to be synthesised by the semantic
+   actions. The variables, constants and text produced by the lexical analyser
+   will be symbol table nodes. Most YACC rules will produce lists of TAC,
+   however those involving expressions will need to use "enode's" to specify
+   where the result of the TAC is put. */
+
+%union
+{
+	SYMB   *symb ;		 /* For vars, consts and text */
+	TAC    *tac ;		 /* For most things */
+	ENODE  *enode ;		 /* For expressions */
+}
+
+/* Tokens. Most of these don't need types, since they have no associated
+   attribute. However variables, integers and text have to have a more complex
+   structure, since they return symbol table nodes as attributes. */
+
+%token         FUNC			 /* 'FUNC' */
+%token <symb>  VARIABLE			 /* variable name */
+%token         ASSIGN_SYMBOL		 /* ':=' */
+%token <symb>  INTEGER			 /* integer number */
+%token         PRINT			 /* 'PRINT' */
+%token <symb>  TEXT			 /* quoted text */
+%token         RETURN			 /* 'RETURN' */
+%token         CONTINUE			 /* 'CONTINUE */
+%token         IF			 /* 'IF' */
+%token         THEN			 /* 'THEN' */
+%token         ELSE			 /* 'ELSE' */
+%token         FI			 /* 'FI' */
+%token         WHILE			 /* 'WHILE' */
+%token         DO			 /* 'DO' */
+%token         DONE			 /* 'DONE' */
+%token         VAR			 /* 'VAR' */
+%token         UMINUS			 /* used for precedence */
+
+/* Now type declarations for the non-terminals. Most non-terminals just return
+   a list of TAC as result, however expressions also return a pointer to the
+   symbol holding the result of the calculation. */
+
+%type <tac>     program
+%type <tac>     function_list
+%type <tac>     function
+%type <tac>     parameter_list
+%type <tac>     variable_list
+%type <enode>   argument_list
+%type <enode>   expression_list
+%type <tac>     statement
+%type <tac>     assignment_statement
+%type <enode>   expression
+%type <tac>     print_statement
+%type <tac>     print_list
+%type <tac>     print_item
+%type <tac>     return_statement
+%type <tac>     null_statement
+%type <tac>     if_statement
+%type <tac>     while_statement
+%type <tac>     block
+%type <tac>     declaration_list
+%type <tac>     declaration
+%type <tac>     statement_list
+%type <tac>     error
+
+/* We define the precedence of the arithmetic operators, including a
+   pseudo-token, "UMINUS" to be used for unary minus when it occurs in
+   expressions. */
+
+%left  '+' '-'
+%left  '*' '/'
+%right UMINUS
+
+%%
+
+/* These are the grammar rules. "program" is the sentence symbol of the
+   grammar. It uses the default action $$ = $1 ; to pass back the TAC
+   constructed. */
+
+program			:	function_list
+			;
+
+/* "function_list" is typical of may rules with two parts. Where we have a
+   "function_list" followed by a "function" we call "join_tac()" to combine the
+   code for each into one. Note that this use of "join_tac()", involving a walk
+   down one of the code lists is very inefficient if the code gets at all
+   large. If we intend using VSL for major programs (admittedly unlikely), then
+   we should wish to avoid this each time we joined code. We should probably
+   chose to use a non-linked TAC representation and place markers as discussed
+   in chapter 6. */
+
+function_list		:	function
+			|	function_list function
+				{
+					$$ = join_tac( $1, $2 ) ;
+				}
+			;
+
+/* Note that when we start a new "function" we are able to set the temporary
+   variable count back to zero, since temporary variable names need only be
+   unique within the function where they are declared. Like most rules we call
+   a subsidiary routine, "do_func()", to build the code.
+
+   This is one of the places where we attempt rudimentary error recovery. We do
+   not specify a synchronising set, but let the parser recover for itself. */
+
+function		:	FUNC VARIABLE '(' parameter_list ')'
+			        statement
+				{
+					next_tmp = 0 ;
+					$$ = do_func( $2, $4, $6 ) ;
+				}
+			|	error
+				{
+					error( "Bad function syntax" ) ;
+					$$ = NULL ;
+				}
+			;
+
+parameter_list		:	variable_list
+			|
+				{
+					$$ = NULL ;
+				}
+			;
+
+variable_list		:	VARIABLE
+				{
+					$$ = declare_var( $1 ) ;
+				}		
+			|	variable_list ',' VARIABLE
+				{
+					TAC *t = declare_var( $3 ) ;
+
+					t->prev = $1 ;
+					$$ = t ;
+				}		
+			;
+
+statement		:	assignment_statement
+			|	return_statement
+			|	print_statement
+			|	null_statement
+			|	if_statement
+			|	while_statement
+			|	block
+			|   	error
+				{
+					error( "Bad statement syntax" ) ;
+					$$ = NULL ;
+				}
+			;
+
+assignment_statement	:	VARIABLE ASSIGN_SYMBOL expression
+				{
+
+					$$ = do_assign( $1, $3 ) ;
+				}
+			;
+
+/* Rules for expressions. Note the use of "%prec UMINUS" to define the higher
+   precedence of negation. */
+
+expression		:	expression '+' expression
+				{
+					$$ = do_bin( TAC_ADD, $1, $3 ) ;
+				}
+			|	expression '-' expression
+				{
+					$$ = do_bin( TAC_SUB, $1, $3 ) ;
+				}
+			|	expression '*' expression
+				{
+					$$ = do_bin( TAC_MUL, $1, $3 ) ;
+				}
+			|	expression '/' expression
+				{
+					$$ = do_bin( TAC_DIV, $1, $3 ) ;
+				}
+			|	'-' expression  %prec UMINUS
+				{
+					$$ = do_un( TAC_NEG, $2 ) ;
+				}
+			|	'(' expression ')'
+				{
+					$$ = $2 ;
+				}		
+			|	INTEGER
+				{
+					$$ = mkenode( NULL, $1, NULL ) ;
+				}
+			|	VARIABLE
+				{
+					$$ = mkenode( NULL, $1, NULL ) ;
+				}
+			|	VARIABLE '(' argument_list ')'
+				{
+					$$ = do_fnap( $1, $3 ) ;
+				}		
+			|   	error
+				{
+					error( "Bad expression syntax" ) ;
+					$$ = mkenode( NULL, NULL, NULL ) ;
+				}
+			;
+
+argument_list		:
+				{
+					$$ = NULL ;
+				}
+			|	expression_list
+			;
+
+expression_list		:	expression
+			|	expression_list ',' expression
+				{
+
+					/* Construct a list of expr nodes */
+
+					$1->next = $3 ;
+					$$       = $1 ;
+				}
+			;
+
+print_statement		:	PRINT print_list
+				{
+					$$ = $2 ;
+				}		
+			;
+
+print_list		:	print_item
+			|	print_list ',' print_item
+				{
+					$$ = join_tac( $1, $3 ) ;
+				}		
+			;
+
+/* PRINT items are handled by calls to library routines. These take as their
+   argument the libary routine to call and the symbol to pass as argument. */
+
+print_item		:	expression
+				{
+
+					/* Call printn library routine */
+
+					$$ = join_tac( $1->tac,
+						       do_lib( LIB_PRINTN,
+						       $1->res )) ;
+				}
+			|	TEXT
+				{
+
+					/* Call prints, passing the address of
+					   the string */
+
+					$$ = do_lib( LIB_PRINTS, $1 ) ;
+				}
+			;
+
+return_statement	:	RETURN expression
+				{
+					TAC *t = mktac( TAC_RETURN, $2->res,
+							NULL, NULL ) ;
+					t->prev = $2->tac ;
+					free_enode( $2 ) ;
+					$$      = t ;
+				}		
+			;
+
+null_statement		:	CONTINUE
+				{
+					$$ = NULL ;
+				}		
+			;
+
+/* Note the use of two different routines to handle the different types of IF
+   statement. We could have shared this code for conciseness. */
+
+if_statement		:	IF expression THEN statement FI
+				{
+					$$ = do_if( $2, $4 ) ;
+				}
+			|	IF expression THEN statement
+			        ELSE statement FI
+				{
+					$$ = do_test( $2, $4, $6 ) ;
+				}
+			;
+
+while_statement		:	WHILE expression DO statement DONE
+				{
+					$$ = do_while( $2, $4 ) ;
+				}		
+			;
+
+block			:	'{' declaration_list statement_list '}'
+				{
+					$$ = join_tac( $2, $3 ) ;
+				}		
+			;
+
+declaration_list	:
+				{
+					$$ = NULL ;
+				}
+			|	declaration_list declaration
+				{
+					$$ = join_tac( $1, $2 ) ;
+				}
+			;
+
+declaration		:	VAR variable_list
+				{
+					$$ = $2 ;
+				}
+			;
+
+statement_list		:	statement
+
+			|	statement_list statement
+				{
+					$$ = join_tac( $1, $2 ) ;
+				}		
+			;
+
+%%
+
+/* These are the routines to support the various YACC rules. It is invariably
+   clearer to put anything but the simplest semantic action in a routine,
+   because the layout of YACC bunches code to the right so much. */
+
+
+TAC *do_func( SYMB *func,	 		 /* Function */
+	      TAC  *args,	 		 /* Its args */
+	      TAC  *code )	 		 /* Its code */
+
+/* For a function we must add TAC_BEGINFUNC and TAC_ENDFUNC quadruples
+   around it, and a new label at the start. We then enter the name of the
+   function in the symbol table. It should not have been declared as a variable
+   or function elsewhere, and so should still have type T_UNDEF.
+
+   The function may already be the subject of function calls. The address of
+   the quadruples for these calls are held in the LABEL2 field of its symbol
+   table entry, ready for backpatching. We run down this list backpatching in
+   the address of the starting label, and then replace the field with the
+   address of the starting label, also updating the type to T_FUNC.
+
+   Note that there is a fault in the compiler at this point. If we never
+   declare a function that is used, then its address will never be backpatched.
+   This is a semantic check that needs to be added at the end of parsing. */
+
+{
+	TAC *tlist ;			 /* The backpatch list */
+
+	TAC *tlab ;			 /* Label at start of function */
+	TAC *tbegin ;			 /* BEGINFUNC marker */
+	TAC *tend ;			 /* ENDFUNC marker */
+
+	/* Add this function to the symbol table. If its already there its been
+	   used before, so backpatch the address into the call opcodes. If
+	   declared already we have a semantic error and give up. Otherwise
+	   patch in the addresses and declare as a function */
+
+	if( func->type != T_UNDEF )
+	{
+		error( "function already declared" ) ;
+		return NULL ;
+	}
+
+	tlab   = mktac( TAC_LABEL,     mklabel( next_label++ ), NULL, NULL ) ;
+	tbegin = mktac( TAC_BEGINFUNC, NULL, NULL, NULL ) ;
+	tend   = mktac( TAC_ENDFUNC,   NULL, NULL, NULL ) ;
+
+	tbegin->prev = tlab ;
+	code         = join_tac( args, code ) ;
+	tend->prev   = join_tac( tbegin, code ) ;
+
+	tlist = func->LABEL2 ;			 /* List of addresses if any */
+
+	while( tlist != NULL )
+	{
+		TAC *tnext = tlist->LB ;  	 /* Next on list */
+
+		tlist->LB  = tlab ;
+		tlist      = tnext ;
+	}
+
+	func->type   = T_FUNC ;		 /* And declare as func */
+	func->LABEL2 = tlab ;
+
+	return tend ;
+
+}	/* TAC *do_func( SYMB *func,
+		     	 TAC  *args,
+			 TAC  *code ) */
+
+
+TAC *declare_var( SYMB *var )
+
+/* All variable names may be used only once throughout a program. We check here
+   that they have not yet been declared and if so declare them, setting their
+   stack offset to -1 (an invalid offset) and marking their address descriptor
+   empty. Note that this is a fault in the compiler. We really do need to mark
+   the beginning and end of blocks in which variables are declared, so that
+   scope can be checked. */
+
+{
+	if( var->type != T_UNDEF )
+	{
+		error( "variable already declared" ) ;
+		return NULL ;
+	}
+
+	var->type  = T_VAR ;
+	var->ADDR2 = -1 ;		 /* Unset address */
+
+	/* TAC for a declaration */
+
+	return  mktac( TAC_VAR, var, NULL, NULL ) ;
+
+}	/* TAC *declare_var( SYMB *var ) */
+
+
+TAC *do_assign( SYMB  *var,	 /* Variable to be assigned */
+		ENODE *expr )	 /* Expression to assign */
+
+/* An assignment statement shows the use of expression nodes. We construct a
+   copy node to take the result of the expression and copy it into the
+   variable, having performed suitable semantic checks. Note that if we
+   discover that the variable has not been declared, we declare it, to prevent
+   further non-declaration errors each time it is referenced. */
+
+{
+	TAC  *code ;
+
+	/* Warn if variable not declared, then build code */
+
+	if( var->type != T_VAR )
+		error( "assignment to non-variable" ) ;
+
+	code       = mktac( TAC_COPY, var, expr->res, NULL ) ;
+	code->prev = expr->tac ;
+	free_enode( expr ) ;		 /* Expression now finished with */
+
+	return code ;
+
+}	/* TAC *do_assign( SYMB  *var,
+			   ENODE *expr ) */
+
+
+ENODE *do_bin(  int    binop,		 /* TAC binary operator */
+		ENODE *expr1,		 /* Expressions to operate on */
+		ENODE *expr2 )
+
+/* We then have the first of the arithmetic routines to handles binary
+   operators.  We carry out one of the few optimisations in the compiler here,
+   constant folding, reusing the expression node for efficiency. If we can't do
+   folding we generate the result into a temporary variable, which we first
+   declare, returning an expression node for the TAC with the temporary in the
+   result field. */
+
+{
+	TAC  *temp ;			 /* TAC code for temp symbol */
+	TAC  *res ;			 /* TAC code for result */
+
+	/* Do constant folding if possible. Calculate the constant into expr1
+	   and free up expr2. */
+
+	if(( expr1->ETYPE == T_INT ) && ( expr2->ETYPE == T_INT ))
+	{
+		switch( binop )		 /* Chose the operator */
+		{
+		case TAC_ADD:
+
+			expr1->EVAL1 = expr1->EVAL1 + expr2->EVAL1 ;
+			break ;
+
+		case TAC_SUB:
+
+			expr1->EVAL1 = expr1->EVAL1 - expr2->EVAL1 ;
+			break ;
+
+		case TAC_MUL:
+
+			expr1->EVAL1 = expr1->EVAL1 * expr2->EVAL1 ;
+			break ;
+
+		case TAC_DIV:
+
+			expr1->EVAL1 = expr1->EVAL1 / expr2->EVAL1 ;
+			break ;
+		}
+
+		free_symb( expr2->res ) ;  /* Release space in expr2 */
+		free_enode( expr2 ) ;
+
+		return expr1 ;		   /* The new expression */
+	}
+
+	/* Not constant, so create a TAC node for a binary operator, putting
+	   the result in a temporary. Bolt the code together, reusing expr1 and
+	   freeing expr2. */
+
+	temp       = mktac( TAC_VAR, mktmp(), NULL, NULL ) ;
+	temp->prev = join_tac( expr1->tac, expr2->tac ) ;
+	res        = mktac( binop, temp->VA, expr1->res, expr2->res ) ;
+	res->prev  = temp ;
+
+	expr1->res = temp->VA ;
+	expr1->tac = res ;
+	free_enode( expr2 ) ;
+
+	return expr1 ;	
+
+}	/* ENODE *do_bin(  int    binop,
+	 		   ENODE *expr1,
+			   ENODE *expr2 ) */
+
+
+ENODE *do_un(  int    unop,		 /* TAC unary operator */
+	       ENODE *expr )		 /* Expression to operate on */
+
+/* This is an analagous routine to deal with unary operators. In the interests
+   of generality it has been written to permit easy addition of new unary
+   operators, although there is only one at present. */
+
+
+{
+	TAC  *temp ;			 /* TAC code for temp symbol */
+	TAC  *res ;			 /* TAC code for result */
+
+	/* Do constant folding if possible. Calculate the constant into expr */
+
+	if( expr->ETYPE == T_INT )
+	{
+		switch( unop )		 /* Chose the operator */
+		{
+		case TAC_NEG:
+
+			expr->EVAL1 = - expr->EVAL1 ;
+			break ;
+		}
+
+		return expr ;		   /* The new expression */
+	}
+
+	/* Not constant, so create a TAC node for a unary operator, putting
+	   the result in a temporary. Bolt the code together, reusing expr. */
+
+	temp       = mktac( TAC_VAR, mktmp(), NULL, NULL ) ;
+	temp->prev = expr->tac ;
+	res        = mktac( unop, temp->VA, NULL, expr->res ) ;
+	res->prev  = temp ;
+
+	expr->res = temp->VA ;
+	expr->tac = res ;
+
+	return expr ;	
+
+}	/* ENODE *do_un(  int    unop,
+	 		  ENODE *expr ) */
+
+
+ENODE *do_fnap( SYMB  *func,		 /* Function to call */
+		ENODE *arglist )	 /* Its argument list */
+
+/* Construct a function call to the given function. If the function is not yet
+   defined, then we must add this call to the backpatching list. Return the
+   result of the function in a temporary. Note the qualication about
+   backpatching above in the definition of "do_func()"
+
+   When constructing a function call we put the result in a temporary. We join
+   all the TAC for the expressions first, then join the code for the TAC_ARG
+   instructions, since arg instructions must appear consecutively. */
+
+{
+	ENODE  *alt ;			 /* For counting args */
+	SYMB   *res ;			 /* Where function result will go */
+	TAC    *code ;			 /* Resulting code */
+	TAC    *temp ;			 /* Temporary for building code */
+
+	/* Check that this is a valid function. In this case it must either be
+	   T_UNDEF or T_FUNC. If it is declare the result, run down the
+	   argument list, joining up the code for each argument, then generate
+	   a sequence of arg instructions and finally a call instruction */
+
+	if(( func->type != T_UNDEF ) && ( func->type != T_FUNC ))
+	{
+		error( "function declared other than function" );
+		return NULL ;
+	}
+
+	res   = mktmp() ;		             /* For the result */
+	code  = mktac( TAC_VAR, res, NULL, NULL ) ;
+
+	for( alt = arglist ; alt != NULL ; alt = alt->next )  /* Join args */
+		code = join_tac( code, alt->tac ) ;
+
+	while( arglist != NULL )	 /* Generate ARG instructions */
+	{
+		temp       = mktac( TAC_ARG, arglist->res, NULL, NULL ) ;
+		temp->prev = code ;
+		code       = temp ;
+
+		alt = arglist->next ;
+		free_enode( arglist ) ;	 /* Free the space */
+		arglist = alt ;
+	} ;
+
+	temp       = mktac( TAC_CALL, res, (SYMB *)func->LABEL2, NULL ) ;
+	temp->prev = code ;
+	code       = temp ;
+
+	/* If the function is undefined update its backpatching list with the
+	   address of this instruction and then return an expression node for
+	   the result */
+
+	if( func->type == T_UNDEF )
+		func->LABEL2 = code ;
+
+	return mkenode( NULL, res, code ) ;
+
+}	/* ENODE *do_fnap( SYMB  *func,
+		           ENODE *arglist ) */
+
+
+TAC *do_lib( int   rtn,			 /* Routine to call */
+	     SYMB *arg )		 /* Argument to pass */
+
+/* PRINT items are handled by calls to library routines. These take as their
+   argument the libary routine to call and the symbol to pass as argument.
+   This routine constructs a call to a libary routine with a single argument.
+*/
+
+{
+	TAC *a = mktac( TAC_ARG, arg, NULL, NULL ) ;
+	TAC *c = mktac( TAC_CALL, NULL, (SYMB *)library[rtn], NULL ) ;
+
+	c->prev = a ;
+
+	return c ;
+
+}	/* TAC *do_lib( int   rtn,
+	   		SYMB *arg ) */
+
+
+TAC *do_if( ENODE *expr,		 /* Condition */
+	    TAC   *stmt )		 /* Statement to execute */
+
+/* For convenience we have two routines to handle IF statements, "do_if()"
+   where there is no ELSE part and "do_test()" where there is. We always
+   allocate TAC_LABEL instructions, so that the destinations of all branches
+   will appear as labels in the resulting TAC code. */
+
+{
+	TAC *label = mktac( TAC_LABEL, mklabel( next_label++ ), NULL, NULL ) ;
+	TAC *code  = mktac( TAC_IFZ, (SYMB *)label, expr->res, NULL ) ;
+
+	code->prev  = expr->tac ;
+	code        = join_tac( code, stmt ) ;
+	label->prev = code ;
+
+	free_enode( expr ) ;		 /* Expression finished with */
+
+	return label ;
+
+}	/* TAC *do_if( ENODE *expr,
+	    	       TAC   *stmt ) */
+
+
+TAC *do_test( ENODE *expr,		 /* Condition */
+	      TAC   *stmt1,		 /* THEN part */
+	      TAC   *stmt2 )		 /* ELSE part */
+
+/* Construct code for an if statement with else part */
+
+{
+	TAC *label1 = mktac( TAC_LABEL, mklabel( next_label++ ), NULL, NULL ) ;
+	TAC *label2 = mktac( TAC_LABEL, mklabel( next_label++ ), NULL, NULL ) ;
+	TAC *code1  = mktac( TAC_IFZ, (SYMB *)label1, expr->res, NULL ) ;
+	TAC *code2  = mktac( TAC_GOTO, (SYMB *)label2, NULL, NULL ) ;
+
+	code1->prev  = expr->tac ;		        /* Join the code */
+	code1        = join_tac( code1, stmt1 ) ;
+	code2->prev  = code1 ;
+	label1->prev = code2 ;
+	label1       = join_tac( label1, stmt2 ) ;
+	label2->prev = label1 ;
+
+	free_enode( expr ) ;		 /* Free the expression */
+
+	return label2 ;
+
+}	/* TAC *do_test( ENODE *expr,
+	      		 TAC   *stmt1,
+	      		 TAC   *stmt2 ) */
+
+
+TAC *do_while( ENODE *expr,		 /* Condition */
+	       TAC   *stmt )		 /* Body of loop */
+
+/* Do a WHILE loop. This is the same as an IF statement with a jump back at the
+   end. We bolt a goto on the end of the statement, call do_if to construct the
+   code and join the start label right at the beginning */
+
+{
+	TAC *label = mktac( TAC_LABEL, mklabel( next_label++ ), NULL, NULL ) ;
+	TAC *code  = mktac( TAC_GOTO, (SYMB *)label, NULL, NULL ) ;
+
+	code->prev = stmt ;		 /* Bolt on the goto */
+
+	return join_tac( label, do_if( expr, code )) ;
+
+}	/* TAC *do_while( ENODE *expr,
+	       		  TAC   *stmt ) */
+
+
+ENODE *mkenode( ENODE *next,
+		SYMB  *res,
+		TAC   *code )
+
+/* The routine to make an expression node. We put this here rather than with
+   the other utilities in "main.c", since it is only used in the parser. */
+
+{
+	ENODE *expr = get_enode() ;
+
+	expr->next = next ;
+	expr->res  = res ;
+	expr->tac  = code ;
+
+	return expr ;
+
+}	/* ENODE *mkenode( ENODE *next,
+			   SYMB  *res,
+			   TAC   *code ) */
+
+
+void  yyerror( char *str )
+
+/* The Yacc default error handler. This just calls our error handler */
+
+{
+	error( str ) ;
+
+}	/* void  yyerror( char *str ) */
+//E*O*F parser.y//
+
+echo x - scanner.l
+mv scanner.l scanner.l.old
+cat > "scanner.l" << '//E*O*F scanner.l//'
+%{
+/******************************************************************************
+*******************************************************************************
+
+
+      SSSSSS     CCCCC     AAAA    NN    NN  NN    NN  EEEEEEEE  RRRRRRR 
+     SSSSSSSS   CCCCCCC   AAAAAA   NNN   NN  NNN   NN  EEEEEEEE  RRRRRRRR
+     SS        CC        AA    AA  NNNN  NN  NNNN  NN  EE        RR    RR
+     SSSSSSS   CC        AAAAAAAA  NN NN NN  NN NN NN  EEEEEE    RRRRRRRR
+           SS  CC        AA    AA  NN  NNNN  NN  NNNN  EE        RRRRRRR 
+           SS  CC        AA    AA  NN  NNNN  NN  NNNN  EE        RR  RR  
+     SSSSSSSS   CCCCCCC  AA    AA  NN   NNN  NN   NNN  EEEEEEEE  RR   RR 
+      SSSSSS     CCCCC   AA    AA  NN    NN  NN    NN  EEEEEEEE  RR    RR
+
+
+*******************************************************************************
+*******************************************************************************
+
+			      A Compiler for VSL
+			      ==================
+   A scanner for VSL
+
+   Modifications:
+   ==============
+
+   16 Nov 88 JPB:  First version
+   26 Apr 89 JPB:  Simple version
+   25 Jul 89 JPB:  Final version for publication
+
+*******************************************************************************
+******************************************************************************/
+
+#include <stdio.h>
+#include <ctype.h>
+#include "vc.h"
+#include "parser.h"
+
+/* Routines defined here. These are in the code section below and build symbol
+   table entries for variable names, integer constants and text strings
+   respectively. */ 
+
+void  mkname( void ) ;
+void  mkval( void ) ;
+void  mktext( void ) ;
+
+/* We define some useful patters using regular expressions as described in
+   chapter 5. Note how earlier definitions are used later (e.g. the definition
+   of "delimiter" in the definition of "whitespace". These patterns are very
+   straightforward, since all VSL reserved words use upper case letters and
+   variable names use only lower case. */
+
+%}
+
+comment		"//".*
+delimiter	[ \t\n]
+whitespace	{delimiter}+
+uc_letter	[A-Z]
+lc_letter	[a-z]
+letter		{lc_letter}|{uc_letter}
+ascii_char	[^\"\n]
+escaped_char	\\n|\\\"
+digit		[0-9]
+variable	{lc_letter}({lc_letter}|{digit})*
+integer		{digit}+
+text		\"({ascii_char}|{escaped_char})*\"
+
+%{
+/* Now follows the rule section. We wish to return the appropriate token in
+   each case. We start with rules to ignore comments (everything from // to the
+   end of line) and white space. Then come the three complex lexemes,
+   "variable", "integer" and "text". In each case we call "mkxxx()" to build an
+   appropriate symbol table entry from "yytext" and put the result in "yylval",
+   as the attribute to go back with the token.
+
+   We then include patterns to recognise the assign symbol, ":=", and the
+   reserved words.
+
+   Anything that has not been recognised will then be picked up by the last
+   match, which is for single character tokens. This will only be used if
+   nothing longer can be matched. Single character variables and integers will
+   not be picked up by this, even though they are the same length, because
+   their rule is specified earlier. An alternative approach would be to specify
+   the individual single character tokens that are permissible and return an
+   "ERROR" token for any other single character. The arrangement as it stands
+   leaves detection of such errors to the parser. */
+%}
+
+%%
+
+{comment}	{ 			 /* Ignore comments */ }
+{whitespace}	{ 			 /* Ignore whitespace */ }
+{variable}	{ mkname() ;             /* Save the variable name */
+		  return VARIABLE ;  	 /* A variable name */ }
+{integer}	{ mkval() ;		 /* Save the integer value */
+		  return INTEGER ;   	 /* A number */ }
+{text}		{ mktext() ;		 /* Save the text string */
+		  return TEXT ;      	 /* A string */ }
+":="		{ return ASSIGN_SYMBOL ; /* ':=' */ }
+FUNC		{ return FUNC ;      	 /* 'FUNC' */ }
+PRINT		{ return PRINT ;	 /* 'PRINT' */ }
+RETURN		{ return RETURN ;	 /* 'RETURN' */ }
+CONTINUE	{ return CONTINUE ;	 /* 'CONTINUE' */ }
+IF		{ return IF ;		 /* 'IF' */ }
+THEN		{ return THEN ;		 /* 'THEN' */ }
+ELSE		{ return ELSE ;		 /* 'ELSE' */ }
+FI		{ return FI ;		 /* 'FI' */ }
+WHILE		{ return WHILE ;	 /* 'WHILE' */ }
+DO		{ return DO ;		 /* 'DO' */ }
+DONE		{ return DONE ;		 /* 'DONE' */ }
+VAR		{ return VAR ;		 /* 'VAR' */ }
+.		{ return yytext[0] ; 	 /* Single character operator */ }
+
+%%
+
+/* Support code */
+
+
+void  mkname( void )
+
+/* Lookup a name in the symbol table. If not there set up a new one, returning
+   the result in "yylval". Note that "yylval" is a union, defined in parser.h
+   and so we must specify which member of the union (in this case "symb") we
+   wish to used. We insert the name in the symbol table, but at this stage with
+   type T_UNDEF, since we do not know what its type is. */
+
+{
+	struct symb *t ;		 /* Pointer to looked up symbol */
+	char        *s ;		 /* Permanent text of string */
+
+	/* If the string exists return with it in yylval */
+
+	if((t = lookup( yytext )) != NULL )
+	{
+		yylval.symb = t ;
+		return ;
+	}
+
+	/* Unseen before, so make a permanent copy, set up a new symbol table
+	   node, insert it into the symbol table and assign it to yylval. */
+
+	s = (char *)safe_malloc( yyleng + 1 ) ;	 /* Space for permanent copy */
+
+	strncpy( s, yytext, yyleng ) ;
+	s[yyleng] = EOS ;
+
+	t        = get_symb() ;
+	t->type  = T_UNDEF ;		 /* Don't know which node type yet */
+	t->TEXT1 = s ;			 /* Text argument */
+
+	insert( t ) ;
+	yylval.symb = t ;		 /* Symbol type in union */
+
+}	/* void  mkname( void ) */
+
+
+void  mkval( void )
+
+/* Set up a node for an integer read by the scanner. We use the library routine
+   "atoi()" to convert the text of "yytext" to an integer. */
+
+{
+	yylval.symb = mkconst( atoi( yytext )) ;
+
+}	/* void  mkval( void ) */
+
+
+void  mktext( void )
+
+/* Text is treated very similarly to a variable name. "mktext()" uses
+   "mkname()" to do most of the work, and then just changes the relevant
+   fields. Strings will be put out as constant data at the end of the program
+   and we give it a label to mark its beginning. Note that there is no risk of
+   a piece of text being mistaken for a variable name during symbol lookup,
+   since the text field of a text node includes the surrounding quotes. */
+
+{
+	mkname() ;
+	yylval.symb->type = T_TEXT ;
+	yylval.symb->VAL2 = next_label++ ;
+
+}	/* mktext( void ) */
+//E*O*F scanner.l//
+
+echo x - vam.c
+mv vam.c vam.c.old
+cat > "vam.c" << '//E*O*F vam.c//'
+/******************************************************************************
+*******************************************************************************
+
+
+                         VV    VV    AAAA    MM    MM
+                         VV    VV   AAAAAA   MMM  MMM
+                         VV    VV  AA    AA  MMMMMMMM
+                         VV    VV  AAAAAAAA  MM MM MM
+                         VV    VV  AA    AA  MM    MM
+                          VV  VV   AA    AA  MM    MM
+                           VVVV    AA    AA  MM    MM
+                            VV     AA    AA  MM    MM
+
+
+*******************************************************************************
+*******************************************************************************
+
+			VAM - The VSL Abstract Machine
+			==============================
+
+   A simulator for the VSL Abstract Machine. This is just a glorified switch
+   with signal handling.
+
+   Modifications:
+   ==============
+
+    5 Dec 88  JPB: First Version
+    9 May 91  JPB: fprintf had stderr inserted as first argument in four
+                   places. clock changed to vam_clock to avoid name clashes
+                   with certain compilers, where clock is a reserved
+                   identifier. (J Johnson, M Haberler and R Tearle)
+
+*******************************************************************************
+******************************************************************************/
+
+#include <stdio.h>
+#include <signal.h>
+
+/* The instruction set */
+
+#define  I_HALT	 0 			 /* End of program */
+#define  I_NOP   1 			 /* Do nothing */
+#define  I_TRAP  2 			 /* Output a character */
+#define  I_ADD   3 			 /* ADD Rx,Ry */
+#define  I_SUB   4 
+#define  I_MUL   5 
+#define  I_DIV   6 
+#define  I_STI   7			 /* STI Rx,offset(Ry) */
+#define  I_LDI   8 			 /* LDI offset(Rx),Ry */
+#define  I_LDA   9 			 /* LDA offset(Rx),Ry */
+#define  I_LDR   10 			 /* LDR Rx,Ry */
+#define  I_BZE   11 			 /* BZE offset */
+#define  I_BNZ   12 
+#define  I_BRA   13
+#define  I_BAL   14 			 /* BAL Rx,Ry */
+#define  I_MAX   15
+
+/* System things */
+
+#define  TRUE    1
+#define  FALSE   0
+#define  REGMAX  16 			 /* Number of regs */
+#define  MEMMAX  (256 * 256)		 /* Bytes of memory */
+
+/* Routine to increment the Z flag */
+
+#define  DO_Z(x)  ((x) == 0 ? (z_flag = TRUE) : (z_flag = FALSE))
+
+/* Global variables */
+
+unsigned int   r[REGMAX] ;		 /* Registers */
+unsigned char  mem[MEMMAX] ;		 /* Memory */
+unsigned int   pc ;			 /* Program counter */
+int            z_flag ;			 /* The Zero flag */
+int            vam_clock ;		 /* How many cycles */
+
+char          *image_file ;		 /* Image to load */
+int            trace_flag ;		 /* Do we trace each instruction? */
+
+/* Routines */
+
+void  read_args() ;			 /* Handle args */
+void  init_system() ;			 /* Set up the world */
+void  vam() ;				 /* Simulator */
+int   i_pc() ;				 /* Safely increment the PC */
+void  trace() ;				 /* Dump out state */
+void  print_op() ;			 /* Opcode name */
+
+
+
+
+main( argc, argv )
+
+int    argc ;
+char **argv ;
+
+/* vam takes a single argument, the object file, which is loaded at address
+   zero. There is an optional flag, -t, which means trace at each step. */
+
+{
+	read_args( argc, argv ) ;	 /* Get the arguments */
+	init_system() ;			 /* Set up the machine */
+	vam() ;				 /* Run it */
+
+}	/* main( argc, argv ) */
+
+
+
+
+void  read_args( argc, argv )
+
+int    argc ;
+char **argv ;
+
+/* Read an optional -t flag and a filename */
+
+{
+	int  maxargs = 1 ;		 /* Maxargs expected */
+	int  nextarg = 1 ;		 /* Offset of next argument */
+
+	if( argc < 2 )			 /* Must have at least a first arg */
+	{
+		printf( "vam: Too few args\n" ) ;
+		exit( 10 ) ;
+	}
+
+	/* Check for trace flag */
+
+	if( strcmp( argv[nextarg], "-t" ) == 0 )
+	{
+		nextarg++ ;		 /* Step past */
+		trace_flag = TRUE ;	 /* Turn on tracing */
+	}
+	else
+		trace_flag = FALSE ;	 /* Turn off tracing */
+
+	/* Get the filename */
+
+	if( argc < nextarg )		 /* Check we have a file */
+	{
+		printf( "vam: No image file\n" ) ;
+		exit( 10 ) ;
+	}
+
+	image_file = argv[nextarg] ;
+
+}	/* read_args( argc, argv ) */
+
+
+
+
+void  init_system()
+
+/* Set up the system, ready to run. This means initialising all the registers
+   etc. */
+
+{
+	int   i ;			 /* For counting */
+	int   ch ;			 /* General purpose character */
+	FILE *fh ;			 /* File handle for image */
+
+	for( i = 0 ; i < REGMAX ; i++ )	 /* Clear registers */
+		r[i] = 0 ;
+
+	for( i = 0 ; i < MEMMAX ; i++ )	 /* Clear main memory */
+		mem[i] = 0 ;
+
+	pc = 0 ;			 /* Program counter to start */
+	z_flag = FALSE ;		 /* Clear flag */
+	vam_clock = 0 ;			 /* Zero clock */
+
+	/* Open and load the image file */
+
+	fh = fopen( image_file, "r" ) ;
+
+	if( fh ==  NULL )
+	{
+		printf( "vam: Couldn't open %s\n", image_file ) ;
+		exit( 10 ) ;
+	}
+
+	for( i = 0 ; (ch = fgetc( fh )) != EOF ; i++ )
+		mem[i] = (char)ch ;
+
+	/* Eventually we'll set up interrupt handling here */
+
+}	/* init_system() */
+
+
+
+
+void  vam()
+
+/* The actual simulator. This is just a switchon in a loop */
+
+{
+	unsigned int   o_pc ;		 /* Old pc */
+	unsigned char  op ;		 /* Opcode */
+	int            rx, ry ;		 /* Registers */
+	int            offset ;		 /* Address displacement */
+	int            t ;		 /* Temporary value */
+
+	for( ; ; )
+	{
+		o_pc = pc ;
+
+		switch( op = mem[i_pc()] )
+		{
+		case I_HALT:
+
+			/* Satisfactory termination */
+
+			vam_clock++ ;
+			trace( o_pc, op, rx, ry, offset ) ;
+			exit( 0 ) ;
+
+		case I_NOP:
+
+			vam_clock++ ;
+			trace( o_pc, op, rx, ry, offset ) ;
+			break ;
+
+		case I_TRAP:
+
+			printf( "%c", r[15] ) ;	 /* Print out r[15] in ASCII */
+			DO_Z( r[15] ) ;
+			vam_clock++ ;
+			break ;
+
+		case I_ADD:
+
+			rx = mem[pc] >> 4 ;	 /* Registers */
+			ry = mem[i_pc()] &  0x0f ;
+			DO_Z( r[ry] = r[rx] + r[ry] ) ;
+			vam_clock++ ;
+			break ;
+
+		case I_SUB:
+
+			rx = mem[pc] >> 4 ;	 /* Registers */
+			ry = mem[i_pc()] &  0x0f ;
+			DO_Z( r[ry] = r[rx] - r[ry] ) ;
+			vam_clock++ ;
+			break ;
+
+		case I_MUL:
+
+			rx = mem[pc] >> 4 ;	 /* Registers */
+			ry = mem[i_pc()] &  0x0f ;
+			DO_Z( r[ry] = r[rx] * r[ry] ) ;
+			vam_clock += 5 ;
+			break ;
+
+		case I_DIV:
+
+			rx = mem[pc] >> 4 ;	 /* Registers */
+			ry = mem[i_pc()] &  0x0f ;
+
+			if( r[ry] == 0 )         /* Check for divide by zero */
+			{
+				printf( "vam: Divide by zero trap\n" ) ;
+				DO_Z( r[ry] = 0 ) ;
+				trace( o_pc, op, rx, ry, offset ) ;
+			}
+			else
+				DO_Z( r[ry] = r[rx] / r[ry] ) ;
+
+			vam_clock += 10 ;
+			break ;
+
+		case I_STI:
+
+			rx = mem[pc] >> 4 ;		   /* Registers */
+			ry = mem[i_pc()] &  0x0f ;
+			offset = mem[i_pc()] ;		   /* Offset */
+			offset = (offset << 8) + mem[i_pc()] ;
+			offset = (offset << 8) + mem[i_pc()] ;
+			offset = (offset << 8) + mem[i_pc()] ;
+
+			/* Check we are still in memory first */
+
+			if(( offset + r[ry] + 4 ) > MEMMAX )
+			{
+				fprintf( stderr, "vam: bus error\n" ) ;
+				trace( o_pc, op, rx, ry, offset ) ;
+				exit( 10 ) ;
+			}
+
+			mem[offset + r[ry]]     = r[rx] >> 24        ;
+			mem[offset + r[ry] + 1] = r[rx] >> 16 & 0xff ;
+			mem[offset + r[ry] + 2] = r[rx] >>  8 & 0xff ;
+			mem[offset + r[ry] + 3] = r[rx]       & 0xff ;
+			DO_Z( r[rx] ) ;
+			vam_clock += 2 ;
+			break ;
+
+		case I_LDI:
+		case I_LDA:
+
+			rx = mem[pc] >> 4 ;		   /* Registers */
+			ry = mem[i_pc()] &  0x0f ;
+			offset = mem[i_pc()] ;		   /* Offset */
+			offset = (offset << 8) + mem[i_pc()] ;
+			offset = (offset << 8) + mem[i_pc()] ;
+			offset = (offset << 8) + mem[i_pc()] ;
+
+			/* For LDA just do the operation */
+
+			if( op == I_LDA )
+			{
+				DO_Z( r[ry] = offset + r[rx] ) ;
+				vam_clock += 2 ;
+				break ;
+			}
+
+			/* For LDI Check we are still in memory first */
+
+			if(( offset + r[rx] + 4 ) > MEMMAX )
+			{
+				fprintf( stderr, "vam: bus error\n" ) ;
+				trace( o_pc, op, rx, ry, offset ) ;
+				exit( 10 ) ;
+			}
+
+			t =            mem[offset + r[rx]    ] ;
+			t = (t << 8) + mem[offset + r[rx] + 1] ;
+			t = (t << 8) + mem[offset + r[rx] + 2] ;
+			t = (t << 8) + mem[offset + r[rx] + 3] ;
+			DO_Z( r[ry] = t ) ;
+			vam_clock += 2 ;
+			break ;
+
+		case I_LDR:
+
+			rx = mem[pc] >> 4 ;		   /* Registers */
+			ry = mem[i_pc()] &  0x0f ;
+			vam_clock++ ;
+			DO_Z( r[ry] = r[rx] ) ;
+			break ;
+
+		case I_BZE:
+		case I_BNZ:
+		case I_BRA:
+
+			offset = mem[i_pc()] ;		   /* Offset */
+			offset = (offset << 8) + mem[i_pc()] ;
+			offset = (offset << 8) + mem[i_pc()] ;
+			offset = (offset << 8) + mem[i_pc()] ;
+
+			/* Do we do the branch? */
+
+			if((( op == I_BZE ) && z_flag )  ||
+			   (( op == I_BNZ ) && !z_flag ) ||
+			    ( op == I_BRA ))
+			{
+
+				/* Check we are still in memory first */
+
+				if(( offset + pc - 3 ) >= MEMMAX )
+				{
+					fprintf( stderr, "vam: bus error\n" ) ;
+					trace( o_pc, op, rx, ry, offset ) ;
+					exit( 10 ) ;
+				}
+
+				vam_clock++ ;                   /* Extra tick */
+				pc += offset - 5 ;
+			}
+
+			vam_clock++ ;
+			break ;
+
+		case I_BAL:
+
+			rx = mem[pc] >> 4 ;		   /* Registers */
+			ry = mem[i_pc()] &  0x0f ;
+
+			/* Check we are still in memory first */
+
+			if( r[rx] >= MEMMAX )
+			{
+				fprintf( stderr, "vam: bus error\n" ) ;
+				trace( o_pc, op, rx, ry, offset ) ;
+				exit( 10 ) ;
+			}
+
+			t     = pc ;
+			pc    = r[rx] ;
+			r[ry] = t ;
+			vam_clock += 2 ;
+			break ;
+
+		default:
+
+			printf( "vam: Instruction trap %02x\n", op ) ;
+
+		}
+
+		if( trace_flag )
+			trace( o_pc, op, rx, ry, offset ) ;
+	}
+
+}	/* vam() */
+
+
+
+
+int  i_pc()
+
+/* Increment the program counter, so long as we stay in memory. Return the OLD
+   value */
+
+{
+	if( pc++ < MEMMAX )
+		return pc - 1 ;
+
+	printf( "vam: bus error\n" ) ;
+	exit( 10 ) ;
+
+}	/* i_pc() */
+
+
+
+
+void  trace( o_pc, op, rx, ry, offset )
+
+unsigned int   o_pc ;
+unsigned char  op ;
+int            rx, ry ;
+int            offset ;
+
+/* Dump out the registers, program counter, and memory near the program counter
+*/
+
+{
+	unsigned  int  b ;		 /* Base for memory dump */
+
+	b = pc < 16 ? 0 : (pc + 32) < MEMMAX ? pc & 0xfffffff0 : MEMMAX - 32 ;
+
+	print_op( o_pc, op, rx, ry, offset ) ;
+
+	printf( "R0  = %08x   ",   r[0] ) ;   /* Registers */
+	printf( "R1  = %08x   ",   r[1] ) ;
+	printf( "R2  = %08x   ",   r[2] ) ;
+	printf( "R3  = %08x\n",    r[3] ) ;
+	printf( "R4  = %08x   ",   r[4] ) ;
+	printf( "R5  = %08x   ",   r[5] ) ;
+	printf( "R6  = %08x   ",   r[6] ) ;
+	printf( "R7  = %08x\n",    r[7] ) ;
+	printf( "R8  = %08x   ",   r[8] ) ;
+	printf( "R9  = %08x   ",   r[9] ) ;
+	printf( "R10 = %08x   ",   r[10] ) ;
+	printf( "R11 = %08x\n",    r[11] ) ;
+	printf( "R12 = %08x   ",   r[12] ) ;
+	printf( "R13 = %08x   ",   r[13] ) ;
+	printf( "R14 = %08x   ",   r[14] ) ;
+	printf( "R15 = %08x\n\n",  r[15] ) ;
+
+	printf( "PC  = %08x   ", pc ) ;	      /* PC */
+	printf( "Z   = %8x   ", z_flag ) ;    /* Status flag */
+	printf( "CLK = %d\n\n", vam_clock ) ; /* Number of ticks */
+
+	printf( "%08x:  ", b ) ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x\n", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%08x:  ", b ) ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x\n", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%08x:  ", b ) ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x\n\n",
+	        mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+
+	b = r[1] < 16 ? 0 : (r[1] + 32) < MEMMAX ? r[1] & 0xfffffff0 :
+						   MEMMAX - 32 ;
+
+	printf( "%08x:  ", b ) ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x\n", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%08x:  ", b ) ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x\n", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%08x:  ", b ) ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x ", mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+	b += 4 ;
+	printf( "%02x%02x%02x%02x\n\n\n",
+	        mem[b], mem[b+1], mem[b+2], mem[b+3] ) ;
+
+	fflush( stdout ) ;
+
+}	/* trace( o_pc, op, rx, ry, offset ) */
+
+
+
+
+void  print_op( o_pc, op, rx, ry, offset )
+
+unsigned int   o_pc ;
+unsigned char  op ;
+int            rx, ry ;
+int            offset ;
+
+/* Print out opcode */
+
+{
+	switch( op )
+	{
+	case I_HALT:
+ 
+		printf( "%08x:  HALT\n\n", o_pc ) ;
+		return ;
+
+	case I_NOP:
+  
+		printf( "%08x:  NOP\n\n", o_pc ) ;
+		return ;
+
+	case I_TRAP:
+ 
+		printf( "%08x:  TRAP\n\n", o_pc ) ;
+		return ;
+
+	case I_ADD:
+  
+		printf( "%08x:  ADD  R%d,R%d\n\n", o_pc, rx, ry) ;
+		return ;
+
+	case I_SUB:
+  
+		printf( "%08x:  SUB  R%d,R%d\n\n", o_pc, rx, ry) ;
+		return ;
+
+	case I_MUL:
+  
+		printf( "%08x:  MUL  R%d,R%d\n\n", o_pc, rx, ry) ;
+		return ;
+
+	case I_DIV:
+  
+		printf( "%08x:  DIV  R%d,R%d\n\n", o_pc, rx, ry) ;
+		return ;
+
+	case I_STI:
+  
+		printf( "%08x:  STI  R%d,%d(R%d)\n\n", o_pc, rx, offset, ry ) ;
+		return ;
+
+	case I_LDI:
+  
+		printf( "%08x:  LDI  %d(R%d),R%d\n\n", o_pc, offset, rx, ry ) ;
+		return ;
+
+	case I_LDA:
+  
+		printf( "%08x:  LDA  %d(R%d),R%d\n\n", o_pc, offset, rx, ry ) ; 
+		return ;
+
+	case I_LDR:
+  
+		printf( "%08x:  LDR  R%d,R%d\n\n", o_pc, rx, ry) ;
+		return ;
+
+	case I_BZE:
+  
+		printf( "%08x:  BZE  %d\n\n", o_pc, offset ) ;
+		return ;
+
+	case I_BNZ:
+  
+		printf( "%08x:  BNZ  %d\n\n", o_pc, offset ) ;
+		return ;
+
+	case I_BRA:
+  
+		printf( "%08x:  BRA  %d\n\n", o_pc, offset ) ;
+		return ;
+
+	case I_BAL:
+  
+		printf( "%08x:  BAL  R%d,R%d\n\n", o_pc, rx, ry) ;
+		return ;
+
+	default:
+     
+		printf( "%08x:  ???\n\n", o_pc ) ;
+	}
+
+}
+//E*O*F vam.c//
+
+echo x - vam.doc
+mv vam.doc vam.doc.old
+cat > "vam.doc" << '//E*O*F vam.doc//'
+			   The VSL Abstract Machine
+
+				  J P Bennett
+
+
+Usage
+=====
+
+Usage is:
+
+    vam [-t] file
+
+In normal operation trace information is printed whenever a NOP is  encountered
+and  when  the  program  halts  normally. With the -t flag trace information is
+printed at the end of each instruction execution. This information consists  of
+the  registers,  program  counter,  zero  flag  status, clock and memory in the
+vicinity of the program counter. A total of 64K bytes of memory is available.
+
+Overview
+========
+
+VAM is a 32 bit machine, with 16 general purpose registers, a program  counter,
+a  single  bit status flag and up to 4G bytes of byte addressed memory. It is a
+byte stream design, but with a very reduced instruction  set  (a  total  of  14
+opcodes). Instructions consist of a single opcode byte, followed by a number of
+argument bytes. 32 bit arguments are stored with the most significant  byte  at
+the  lowest address. In general instructions operating exclusively on registers
+take one cycle, those referencing  memory,  or  involving  a  branch  take  two
+cycles.  The single flag is set to 1 to indicate a zero result. All load, store
+and arithmetic operations affect this flag.
+
+The following is a summary of the instruction set.
+
+HALT
+====
+
+Mnemonic:       HALT
+Opcode value:   0
+Arguments:      None
+                Flag not affected
+Timing:         1 tick
+Action:         Halt the machine
+
+NOP
+===
+
+Mnemonic:       NOP
+Opcode value:   1
+Arguments:      None
+                Flag not affected
+Timing:         1 tick
+Action:         No effect
+
+TRAP
+====
+
+Mnemonic:       TRAP
+Opcode value:   2
+Arguments:      None
+                Flag not affected
+Timing:         1 tick
+Action:         Output LS byte of R15 as ASCII character
+
+ADD
+===
+
+Mnemonic:       ADD Rx,Ry
+Opcode value:   3
+Arguments:      Single byte, Rx in MS nybble, Ry in LS nybble
+                Sets flag on value
+Timing:         1 tick
+Action:         Sum Rx and Ry, putting result in Ry
+
+SUB
+===
+
+Mnemonic:       SUB Rx,Ry
+Opcode value:   4
+Arguments:      Single byte, Rx in MS nybble, Ry in LS nybble
+                Sets flag on value
+Timing:         1 tick
+Action:         Subtract Rx from Ry, putting result in Ry
+
+MUL
+===
+
+Mnemonic:       MUL Rx,Ry
+Opcode value:   5
+Arguments:      Single byte, Rx in MS nybble, Ry in LS nybble
+                Sets flag on value
+Timing:         5 ticks
+Action:         Multiply Rx and Ry, putting result in Ry
+
+DIV
+===
+
+Mnemonic:       DIV Rx,Ry
+Opcode value:   6
+Arguments:      Single byte, Rx in MS nybble, Ry in LS nybble
+                Sets flag on value
+Timing:         10 ticks
+Action:         Divide Rx by Ry, putting result in Ry
+
+STI
+===
+
+Mnemonic:       STI Rx,offset(Ry)
+Opcode value:   7
+Arguments:      Single byte, Rx in MS nybble, Ry in LS nybble
+                32 bit word for offset
+                Sets flag on value
+Timing:         2 ticks
+Action:         Store Rx at the address in Ry indexed by offset
+
+LDI
+===
+
+Mnemonic:       LDI offset(Rx),Ry
+Opcode value:   8
+Arguments:      Single byte, Rx in MS nybble, Ry in LS nybble
+                32 bit word for offset
+                Sets flag on value
+Timing:         2 ticks
+Action:         Load Ry with the value at the address in Ry indexed by offset
+
+LDA
+===
+
+Mnemonic:       LDA offset(Rx),Ry
+Opcode value:   9
+Arguments:      Single byte, Rx in MS nybble, Ry in LS nybble
+                32 bit word for offset
+                Sets flag on value
+Timing:         2 ticks
+Action:         Load Ry with the contents of Ry plus offset
+
+LDR
+===
+
+Mnemonic:       LDR Rx,Ry
+Opcode value:   10
+Arguments:      Single byte, Rx in MS nybble, Ry in LS nybble
+                Sets flag on value
+Timing:         1 tick
+Action:         Load Ry with the value in Rx
+
+BZE
+===
+
+Mnemonic:       BZE offset
+Opcode value:   11
+Arguments:      32 bit word offset
+                Sets flag on value
+Timing:         2 ticks if branch taken, otherwise 1
+Action:         Branch by offset if the flag is 1
+
+BNZ
+===
+
+Mnemonic:       BNZ offset
+Opcode value:   12
+Arguments:      32 bit word offset
+                Sets flag on value
+Timing:         2 ticks if branch taken, otherwise 1
+Action:         Branch by offset if the flag is 0
+
+BAL
+===
+
+Mnemonic:       BAL Rx,Ry
+Opcode value:   13
+Arguments:      Single byte, Rx in MS nybble, Ry in LS nybble
+                Sets flag on value
+Timing:         2 ticks
+Action:         Branch to the address in Rx, putting the return address in Ry
+//E*O*F vam.doc//
+
+echo x - vas.y
+mv vas.y vas.y.old
+cat > "vas.y" << '//E*O*F vas.y//'
+%{
+/******************************************************************************
+*******************************************************************************
+
+
+                         VV    VV    AAAA     SSSSSS 
+                         VV    VV   AAAAAA   SSSSSSSS
+                         VV    VV  AA    AA  SS      
+                         VV    VV  AAAAAAAA  SSSSSSS 
+                         VV    VV  AA    AA        SS
+                          VV  VV   AA    AA        SS
+                           VVVV    AA    AA  SSSSSSSS
+                            VV     AA    AA   SSSSSS 
+
+
+*******************************************************************************
+*******************************************************************************
+
+				 VAM Assember
+				 ============
+
+   A simple assembler for VAM
+
+   Modifications:
+   ==============
+
+   10 Mar 89 JPB:  First version
+    9 May 91 JPB:  '"' changed to '\"' for ANSI consistency.
+
+*******************************************************************************
+******************************************************************************/
+
+#include <stdio.h>
+
+#define  MAXLAB  0x1000			 /* Number of labels */
+
+/* The instruction set */
+
+#define  I_HALT	 0 			 /* End of program */
+#define  I_NOP   1 			 /* Do nothing */
+#define  I_TRAP  2 			 /* Output a character */
+#define  I_ADD   3 			 /* ADD Rx,Ry */
+#define  I_SUB   4 
+#define  I_MUL   5 
+#define  I_DIV   6 
+#define  I_STI   7			 /* STI Rx,offset(Ry) */
+#define  I_LDI   8 			 /* LDI offset(Rx),Ry */
+#define  I_LDA   9 			 /* LDA offset(Rx),Ry */
+#define  I_LDR   10 			 /* LDR Rx,Ry */
+#define  I_BZE   11 			 /* BZE offset */
+#define  I_BNZ   12 
+#define  I_BRA   13
+#define  I_BAL   14 			 /* BAL Rx,Ry */
+#define  I_MAX   15
+
+/* Global variables */
+
+int  pass ;				 /* Which pass */
+int  pc ;				 /* Program counter */
+int  labtab[MAXLAB] ;			 /* Offsets for labels */
+
+	%}
+
+%%
+
+program      :  statement
+             |  program statement
+             ;
+
+statement    :  comment return
+             |  label ':' comment return
+		{
+			labtab[$1] = pc ;
+		}
+             |  label ':' ws instruction comment return
+		{
+			labtab[$1] = pc ;
+		}
+             |  ws instruction comment return
+             ;
+
+label        :  'L' number	{ $$ = $2 ; } 
+             ;
+
+number       :  number digit
+		{
+			$$ = $1 * 10 + $2 ;
+		}
+	     |  digit
+             ;
+
+digit        :  '0'	{ $$ = 0x0 ; }
+             |  '1'	{ $$ = 0x1 ; }
+             |  '2'	{ $$ = 0x2 ; }
+             |  '3'	{ $$ = 0x3 ; }
+             |  '4'	{ $$ = 0x4 ; }
+             |  '5'	{ $$ = 0x5 ; }
+             |  '6'	{ $$ = 0x6 ; }
+             |  '7'	{ $$ = 0x7 ; }
+             |  '8'	{ $$ = 0x8 ; }
+             |  '9'	{ $$ = 0x9 ; }
+
+ws           :  separator
+             |  ws separator
+             ;
+
+separator    :  ' '
+             |  '\t'
+             ;
+
+instruction  :  halt_instr
+             |  nop_instr
+             |  trap_instr
+             |  add_instr
+             |  sub_instr
+             |  mul_instr
+             |  div_instr
+             |  sti_instr
+             |  ldi_instr
+             |  lda_instr
+             |  ldr_instr
+             |  bze_instr
+             |  bnz_instr
+             |  bra_instr
+             |  bal_instr
+	     |  db_instr
+             ;
+
+halt_instr   :  halt_op		{ pbyte( I_HALT ) ; }
+             ;
+
+nop_instr    :  nop_op		{ pbyte( I_NOP ) ; }
+             ;
+
+trap_instr   :  trap_op		{ pbyte( I_TRAP ) ; }
+             ;
+
+add_instr    :  add_op ws reg ',' reg
+		{
+			pbyte( I_ADD ) ;
+			pbyte( ($3 << 4) | $5 ) ;
+		}
+             ;
+
+sub_instr    :  sub_op ws reg ',' reg
+		{
+			pbyte( I_SUB ) ;
+			pbyte( ($3 << 4) | $5 ) ;
+		}
+             ;
+
+mul_instr    :  mul_op ws reg ',' reg
+		{
+			pbyte( I_MUL ) ;
+			pbyte( ($3 << 4) | $5 ) ;
+		}
+             ;
+
+div_instr    :  div_op ws reg ',' reg
+		{
+			pbyte( I_DIV ) ;
+			pbyte( ($3 << 4) | $5 ) ;
+		}
+             ;
+
+sti_instr    :  sti_op ws reg ',' offset '(' reg ')'
+		{
+			pbyte( I_STI ) ;
+			pbyte( ($3 << 4) | $7 ) ;
+			pword( $5 ) ;
+		}
+             |  sti_op ws reg ',' label
+		{
+			pbyte( I_STI ) ;
+			pbyte( $3 << 4 ) ;
+			pword( labtab[$5] ) ;
+		}
+             ;
+
+ldi_instr    :  ldi_op ws offset '(' reg ')' ',' reg
+		{
+			pbyte( I_LDI ) ;
+			pbyte( ($5 << 4) | $8 ) ;
+			pword( $3 ) ;
+		}
+             |  ldi_op ws label ',' reg
+		{
+			pbyte( I_LDI ) ;
+			pbyte( $5 ) ;
+			pword( labtab[$3] ) ;
+		}
+             ;
+
+lda_instr    :  lda_op ws offset '(' reg ')' ',' reg
+		{
+			pbyte( I_LDA ) ;
+			pbyte( ($5 << 4) | $8 ) ;
+			pword( $3 ) ;
+		}
+             |  lda_op ws label ',' reg
+		{
+			pbyte( I_LDA ) ;
+			pbyte( $5 ) ;
+			pword( labtab[$3] ) ;
+		}
+             ;
+
+ldr_instr    :  ldr_op ws reg ',' reg
+		{
+			pbyte( I_LDR ) ;
+			pbyte( ($3 << 4) | $5 ) ;
+		}
+             ;
+
+bze_instr    :  bze_op ws offset
+		{
+			pbyte( I_BZE ) ;
+			pword( $3 ) ;
+		}
+             |  bze_op ws label
+		{
+			pbyte( I_BZE ) ;
+			pword( labtab[$3] - pc + 1 ) ;
+		}
+             ;
+
+bnz_instr    :  bnz_op ws offset
+		{
+			pbyte( I_BNZ ) ;
+			pword( $3 ) ;
+		}
+             |  bnz_op ws label
+		{
+			pbyte( I_BNZ ) ;
+			pword( labtab[$3] - pc + 1 ) ;
+		}
+             ;
+
+bra_instr    :  bra_op ws offset
+		{
+			pbyte( I_BRA ) ;
+			pword( $3 ) ;
+		}
+             |  bra_op ws label
+		{
+			pbyte( I_BRA ) ;
+			pword( labtab[$3] - pc + 1 ) ;
+		}
+             ;
+
+bal_instr    :  bal_op ws reg ',' reg
+		{
+			pbyte( I_BAL ) ;
+			pbyte( ($3 << 4) | $5 ) ;
+		}
+             ;
+
+db_instr     :  db_op ws number
+		{
+			pbyte( $3 ) ;
+		}
+	     ;
+
+halt_op      :  'H' 'A' 'L' 'T'
+             ;
+
+nop_op       :  'N' 'O' 'P'
+             ;
+
+trap_op      :  'T' 'R' 'A' 'P'
+             ;
+
+add_op       :  'A' 'D' 'D'
+             ;
+
+sub_op       :  'S' 'U' 'B'
+             ;
+
+mul_op       :  'M' 'U' 'L'
+             ;
+
+div_op       :  'D' 'I' 'V'
+             ;
+
+sti_op       :  'S' 'T' 'I'
+             ;
+
+ldi_op       :  'L' 'D' 'I'
+             ;
+
+lda_op       :  'L' 'D' 'A'
+             ;
+
+ldr_op       :  'L' 'D' 'R'
+             ;
+
+bze_op       :  'B' 'Z' 'E'
+             ;
+
+bnz_op       :  'B' 'N' 'Z'
+             ;
+
+bra_op       :  'B' 'R' 'A'
+             ;
+
+bal_op       :  'B' 'A' 'L'
+             ;
+
+db_op        :  'D' 'B'
+	     ;
+
+reg          :  'R' number	{ $$ = $2 ; }
+             ;
+
+offset       :  number
+             ;
+
+comment      :  text_comment
+	     |  ws text_comment
+	     |
+	     ;
+
+text_comment :  text_comment char
+             |  '\\'
+             ;
+
+char         :  separator
+             |  'a'
+             |  'b'
+             |  'c'
+             |  'd'
+             |  'e'
+             |  'f'
+             |  'g'
+             |  'h'
+             |  'i'
+             |  'j'
+             |  'k'
+             |  'l'
+             |  'm'
+             |  'n'
+             |  'o'
+             |  'p'
+             |  'q'
+             |  'r'
+             |  's'
+             |  't'
+             |  'u'
+             |  'v'
+             |  'w'
+             |  'x'
+             |  'y'
+             |  'z'
+             |  'A'
+             |  'B'
+             |  'C'
+             |  'D'
+             |  'E'
+             |  'F'
+             |  'G'
+             |  'H'
+             |  'I'
+             |  'J'
+             |  'K'
+             |  'L'
+             |  'M'
+             |  'N'
+             |  'O'
+             |  'P'
+             |  'Q'
+             |  'R'
+             |  'S'
+             |  'T'
+             |  'U'
+             |  'V'
+             |  'W'
+             |  'X'
+             |  'Y'
+             |  'Z'
+             |  '0'
+             |  '1'
+             |  '2'
+             |  '3'
+             |  '4'
+             |  '5'
+             |  '6'
+             |  '7'
+             |  '8'
+             |  '9'
+             |  '!'
+             |  '\"'
+             |  '#'
+             |  '$'
+             |  '%'
+             |  '&'
+             |  '\''
+             |  '('
+             |  ')'
+             |  '='
+             |  '-'
+             |  '~'
+             |  '^'
+             |  '\\'
+             |  '|'
+             |  '@'
+             |  '{'
+             |  '['
+             |  '`'
+             |  '_'
+             |  '+'
+             |  ';'
+             |  ':'
+             |  '*'
+             |  '}'
+             |  ']'
+             |  '<'
+             |  ','
+             |  '>'
+             |  '.'
+             |  '?'
+             |  '/'
+             ;
+
+return       :  '\n'
+             ;
+
+%%
+
+void  main( void )
+{
+
+	/* First pass sets up labels */
+
+	pass = 1 ;
+	yyparse() ;
+
+	/* Second pass generates code */
+
+	rewind( stdin ) ;
+	pc   = 0 ;
+	pass = 2 ;
+	yyparse() ;
+
+}	/* void  main( void ) */
+
+
+int  yylex( void )
+{
+	return getchar() ;
+
+}	/* int  yylex( void ) */
+
+
+void  yyerror( char *s )
+
+{
+	fprintf( stderr, "yyerror: %s\n", s ) ;
+
+}	/* void  yyerror( char *s ) */
+
+
+void  pbyte( int  n )
+
+/* Put out the single byte n (on pass 2), advancing pc */
+
+{
+	if( pass == 2 )
+		putchar( n ) ;
+
+	pc++ ;
+
+}	/* void  pbyte( int  n ) */
+
+
+void  pword( int  n )
+
+/* Put out the word n (on pass 2), advancing pc */
+
+{
+	if( pass == 2 )
+	{
+		putchar( n >> 24 ) ;
+		putchar( n >> 16 ) ;
+		putchar( n >>  8 ) ;
+		putchar( n       ) ;
+	}
+
+	pc += 4 ;
+
+}	/* void  pword( int  n ) */
+//E*O*F vas.y//
+
+echo x - vc.h
+mv vc.h vc.h.old
+cat > "vc.h" << '//E*O*F vc.h//'
+/******************************************************************************
+*******************************************************************************
+
+
+          HH    HH  EEEEEEEE    AAAA    DDDDDD    EEEEEEEE  RRRRRRR 
+          HH    HH  EEEEEEEE   AAAAAA   DDDDDDD   EEEEEEEE  RRRRRRRR
+          HH    HH  EE        AA    AA  DD    DD  EE        RR    RR
+          HHHHHHHH  EEEEEE    AAAAAAAA  DD    DD  EEEEEE    RRRRRRRR
+          HH    HH  EE        AA    AA  DD    DD  EE        RRRRRRR 
+          HH    HH  EE        AA    AA  DD    DD  EE        RR  RR  
+          HH    HH  EEEEEEEE  AA    AA  DDDDDDD   EEEEEEEE  RR   RR 
+          HH    HH  EEEEEEEE  AA    AA  DDDDDD    EEEEEEEE  RR    RR
+
+
+*******************************************************************************
+*******************************************************************************
+
+			      A Compiler for VSL
+			      ==================
+
+   This is the general header file.
+
+   Modifications:
+   ==============
+
+   22 Nov 88 JPB:  First version
+   26 Apr 89 JPB:  Version for publication
+   13 Jun 90 JPB:  Now refers to library directory (noted by R C Shaw, Praxis).
+
+*******************************************************************************
+******************************************************************************/
+
+/* We start by defining the various constants used throughout the compiler. */
+
+#define TRUE        1			 /* Booleans */
+#define FALSE       0
+#define EOS         0			 /* End of string */
+#define HASHSIZE  997			 /* Size of symbol table */
+#define R_UNDEF    -1		 	 /* Not a valid register */
+
+/* We define the various symbol types permitted. Note the use of T_UNDEF Many
+   names are entered into the symbol table by the lexical analyser before their
+   type is known, and so we given them an undefined type. */
+
+#define  T_UNDEF  0			 /* Types for symbol table */
+#define  T_VAR 	  1			 /* Local Variable */
+#define  T_FUNC   2			 /* Function */
+#define  T_TEXT   3			 /* Static string */
+#define  T_INT    4			 /* Integer constant */
+#define  T_LABEL  5			 /* TAC label */
+
+/* We define constants for each of the three address code (TAC) instructions.
+   For convenience we have an undefined instruction, then we specify the 12
+   main TAC opcodes. */ 
+
+#define  TAC_UNDEF    0		 	 /* TAC instructions */
+#define  TAC_ADD      1			 /* a := b + c */
+#define  TAC_SUB      2			 /* a := b - c */
+#define  TAC_MUL      3			 /* a := b * c */
+#define  TAC_DIV      4			 /* a := b / c */
+#define  TAC_NEG      5			 /* a := -b */
+#define  TAC_COPY     6			 /* a := b */
+#define  TAC_GOTO     7			 /* goto a */
+#define  TAC_IFZ      8			 /* ifz b goto a */
+#define  TAC_IFNZ     9			 /* ifnz b goto a */
+#define  TAC_ARG     10			 /* arg a */
+#define  TAC_CALL    11			 /* a := call b */
+#define  TAC_RETURN  12			 /* return a */
+
+/* We then add some extra "pseudo-instructions" to mark places in the code.
+   TAC_LABEL s used to mark branch targets. Its first argument will be a symbol
+   table entry for a label giving a unique number for this label. TAC_VAR
+   is associated with variable declarations, to help in assigning stack
+   locations. TAC_BEGINFUNC and TAC_ENDFUNC mark the beginning and end of
+   functions respectively. */
+
+#define  TAC_LABEL       13		 /* Marker for LABEL a */
+#define  TAC_VAR         14		 /* Marker for VAR a */
+#define  TAC_BEGINFUNC   15		 /* Markers for function */
+#define  TAC_ENDFUNC     16
+
+/* The library routines are supplied in an external file. Their entry points
+   are held in a table, and we define the offsets in this table here as
+   LIB_PRINTN and LIB_PRINTS. At present these are the only two library
+   routines, used to print out numbers and strings in PRINT statements. 
+
+   The book assumes that the code generator library and header files are in the
+   same directory as the compiler. For greater flexibility we #define a library
+   directory here. This will almost certainly need changing for individual
+   systems. */
+
+#define  LIB_PRINTN     0		 /* Index into library entry points */
+#define  LIB_PRINTS     1
+#define  LIB_MAX        2
+
+#define  LIB_DIR  "/home/jpb/book/distrib/"  /* Library directory */
+
+/* Many of the structures we are to use have complex unions and subfields.
+   Specifying which field we are want can be verbose and for convenience we
+   define some of the subfields. Thus given a pointer to a symbol table entry,
+   "sp" the "text" field of the "val1" union would be referred to as
+   "sp->val1.text". Instead these #define's allow us to write "sp->TEXT1". */
+
+#define VAL1   val1.val			 /* Value val1 */
+#define TEXT1  val1.text		 /* Text val1 */
+#define VAL2   val2.val			 /* Value val2 */
+#define LABEL2 val2.label		 /* Label val2 */
+#define ADDR2  val2.val			 /* Address val2 */
+#define ETYPE  res->type		 /* Type of expr result */
+#define EVAL1  res->val1.val             /* Value field in expr */
+#define VA     a.var			 /* Var result in TAC */
+#define LA     a.lab			 /* Label result in TAC */
+#define VB     b.var			 /* Var first arg in TAC */
+#define LB     b.lab			 /* Label first arg in TAC */
+#define VC     c.var			 /* Var second arg in TAC */
+#define LC     c.lab			 /* Label second arg in TAC */
+
+/* This is the central structure of the compiler, the symbol table entry, SYMB.
+   The symbol table takes the form of an open hash table. The entries are
+   linked via the "next" field and have a "type" field. The value of this field
+   determines the use made of the two value fields, which may hold text
+   pointers or intgers. The whole is set up using a typedef for clarity in the
+   code.
+
+   For convenience the same structure is used for items like constants and
+   labels even if they do not need to be entered into the symbol table. This
+   makes for a simpler TAC data structure. */
+
+typedef struct symb			 /* Symbol table entry */
+{
+	struct symb *next ;		 /* Next in chain */
+	int          type ;		 /* What is this symbol */
+	union				 /* Primary value */
+	{
+		int         val ;	 /* For integers */
+		char       *text ;	 /* For var names */
+	} val1 ;
+	union				 /* Secondary value */
+	{
+		int         val ;	 /* For offsets etc */
+		struct tac *label ;	 /* For branches */
+	} val2 ;
+} SYMB ;
+
+/* TAC is stored as a doubly-linked list of quadruples. In general we will pass
+   round pointers to the last generated quadruple in the syntax analyser and
+   first generated quadruple in the code generator. The opcode is an integer
+   and the argument and the result fields are either pointers to symbol table
+   entries or pointers to other TAC quadruples (for branch instructions). The
+   names of the fields are based on TAC instructions of the form
+
+      a := b op c
+
+   Again this is implemented as a typedef for convenience */
+
+typedef struct tac			 /* TAC instruction node */
+{
+	struct tac  *next ;		 /* Next instruction */
+	struct tac  *prev ;		 /* Previous instruction */
+	int          op ;		 /* TAC instruction */
+	union				 /* Result */
+	{
+		SYMB        *var ;	 /* Name */
+		struct tac  *lab ;	 /* Address */
+	} a ;
+	union		 		 /* Operands */
+	{
+		SYMB        *var ;
+		struct tac  *lab ;
+	} b ;
+	union
+	{
+		SYMB        *var ;
+		struct tac  *lab ;
+	} c ;
+} TAC ;
+
+/* When translating expressions in the syntax analyser we need to pass back as
+   attribute in YACC not only the code for the expression, but where its result
+   is stored. For this we use the ENODE structure. The "next" field in this
+   allows it to be used for lists of expressions in function calls. typedef is
+   again used for clarity */
+
+typedef struct enode			 /* Parser expression */
+{
+	struct enode *next ;		 /* For argument lists */
+	TAC          *tac ;		 /* The code */
+	SYMB         *res ;		 /* Where the result is */
+} ENODE ;
+
+/* Global variables used throughout the compiler. "symbtab" is the hashtable.
+   Each element is a list of symbol table nodes. "library" is an array holding
+   the label numbers of the entry points to library routines.
+
+   Temporary variables are given names of the form "Tnnn" where nnn is a unique
+   number.  "next_tmp" holds the number of the next temporary and is
+   incremented each time one is used. A similar scheme with "next_label" is
+   used to assign unique labels of the form "Lnnn". */
+
+extern SYMB *symbtab[HASHSIZE] ;	 /* Symbol table */
+extern TAC  *library[LIB_MAX] ;		 /* Entries for library routines */
+extern int   next_tmp ;			 /* Count of temporaries */
+extern int   next_label ;		 /* Count of labels */
+
+/* Global routines that although defined in one section may be used elsewhere.
+   The majority of these are in the main section of the compiler. */
+
+extern SYMB  *mkconst( int  n ) ;	 /* In main.c */
+extern SYMB  *mklabel( int  l ) ;
+extern SYMB  *mktmp( void ) ;
+extern TAC   *mktac( int   op,
+		     SYMB *a,
+		     SYMB *b,
+		     SYMB *c ) ;
+extern TAC   *join_tac( TAC *c1,
+		        TAC *c2 ) ;
+extern void   insert( SYMB *s ) ;
+extern SYMB  *lookup( char *s ) ;
+extern SYMB  *get_symb( void ) ;
+extern void   free_symb( SYMB *s ) ;
+extern ENODE *get_enode( void ) ;
+extern void   free_enode( ENODE *expr ) ;
+extern void  *safe_malloc( int  n ) ;
+extern void   error( char *str ) ;
+extern void   print_instr( TAC *i ) ;
+
+extern void   cg( TAC *tl ) ;	 	 /* In cg.c */
+
+extern char  *malloc( int  size ) ;	 /* External routines */
+//E*O*F vc.h//
+
+exit 0

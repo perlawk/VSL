@@ -1,0 +1,1785 @@
+
+# This is a shell archive.  Remove anything before this line, then
+# unpack it by saving it in a file and typing "sh file".  (Files
+# unpacked will be owned by you and have default permissions.)
+#
+# This archive contains:
+# README
+# cgvax.c
+# headervax.
+# libvax.
+# mainvax.c
+# parservax.h
+# parservax.y
+# scannervax.l
+# testvax.out
+# testvax.res
+# testvax.tac
+# testvax.vsl
+
+echo x - README
+mv README README.old
+cat > "README" << '//E*O*F README//'
+These are the original files altered somewhat to produce VAX MACRO assembly
+code. The only file significantly altered is cgvax.c.  Another change can be
+found in parservax.h where the if-then TAC code is modified to allow for
+MACRO's inability to branch conditionally beyond 256 bytes.
+
+The system was developed under UNITY, a pseudo Unix which is based on VMS and
+which does not have ANSI C. The language updating should not be too
+tedious. Most of the differences are in the way function arguments are 
+listed. 
+
+After lexing, yaccing, compiling and linking the files included below you
+should be able to:
+ 
+   unix:  vcvax < whatever.vsl > whatever.out 
+
+   vms:   macro whatever.out      
+   vms:   link whatever
+   vms:   run whatever
+
+Files included:
+
+   mainvax.c     (modified main.c)
+   scannervax.l  (modified scanner.l)
+   parservax.y   (modified parser.y)
+   parservax.h   (modified parser.h)
+   cgvax.c       (modified cg.c)
+   libvax.       (MACRO library)
+   headervax.    (MACRO header)
+   testvax.vsl   (test program from p.224)
+   testvax.out   (VAX assembly code)
+   testvax.res   (Run listing)
+
+This system is the work of Ken Schweller, please contact him directly with any
+queries.
+
+   Ken Schweller
+   School of Science
+   Buena Vista College
+   Storm Lake, Iowa 50588
+   USA
+        
+   Email: schweller@bvc.edu
+//E*O*F README//
+
+echo x - cgvax.c
+mv cgvax.c cgvax.c.old
+cat > "cgvax.c" << '//E*O*F cgvax.c//'
+/*  CGvax.c   */
+
+/* 22 Nov 88 JPB
+   26 Apr 89 JPB
+    1 Aug 89 JPB
+   28 May 91 KGS: VAX MACRO version */
+
+#include "stdio.h"
+#include "ctype.h"
+#include "vc.h"
+
+#define R_P	6
+#define R_RES	7
+#define R_GEN	8
+#define R_MAX	11
+
+
+#define P_OFF	0
+#define PC_OFF	4
+#define VAR_OFF	-4
+#define PAR_OFF 4
+
+
+#define MODIFIED	TRUE
+#define UNMODIFIED	FALSE
+
+struct
+{
+	struct symb * name;
+	int  modified;
+}rdesc[R_MAX];
+
+int tos;
+int next_arg;
+int num_args;
+
+char *first_procedure_name;
+int   first_flag = 1;
+
+
+TAC * init_cg( tl)
+TAC * tl;
+{
+	int   r;
+	TAC * c;
+	TAC * p;
+
+	for(r=0; r<R_MAX; r++)
+		rdesc[r].name = NULL;
+
+
+	tos = VAR_OFF;
+	next_arg = 0;
+        num_args = 0;
+	c = NULL;
+	p = tl;
+	while( p != NULL)
+	{
+		p->next = c;
+		c	= p;
+		p  	= p->prev;
+	}
+	return c;
+}
+
+cg( tl)
+TAC * tl;
+{
+	TAC * tls = init_cg(tl);
+
+        TAC * tls2 = tls;
+
+	printf(";          THREE ADDRESS CODE\n\n");
+
+	for(; tls2 != NULL; tls2 = tls2->next)
+	{ 
+		printf(";  ");
+		print_instr(tls2);
+	}
+
+	printf("\n\n\n\n;         MACHINE CODE\n");
+
+        cg_sys("headervax");
+	for(; tls != NULL; tls = tls->next)
+	{ 
+		cg_instr(tls);
+	}
+	cg_sys("libvax");
+	cg_strings();
+        printf("\n\n          .end %s\n", first_procedure_name);
+}
+
+
+cg_instr(c)
+TAC * c;
+{
+	switch(c->op)
+	{
+	case TAC_UNDEF:
+		error("cannot translate TAC_UNDEF");
+		return;
+	case TAC_ADD:
+		cg_bin("ADDL2", c->VA, c->VB, c->VC);
+		return;
+	case TAC_SUB:
+		cg_binw("SUBL3", c->VA, c->VB, c->VC);
+		return;
+	case TAC_MUL:
+		cg_bin("MULL2", c->VA, c->VB, c->VC);
+		return;
+	case TAC_DIV:
+		cg_binw("DIVL3", c->VA, c->VB, c->VC);
+		return;
+	case TAC_NEG:
+		cg_binw("SUBL3", c->VA, mkconst(0), c->VB);
+		return;
+	case TAC_COPY:
+		cg_copy(c->VA, c->VB);
+		return;
+	case TAC_GOTO:
+		cg_cond("JMP", NULL, c->LA->VA->VAL1);
+		return;
+	case TAC_IFZ:
+		cg_cond("BEQL", c->VB, c->LA->VA->VAL1);
+		return;
+	case TAC_IFNZ:
+		cg_cond("BNEQ", c->VB, c->LA->VA->VAL1);
+		return;
+	case TAC_ARG:
+		cg_arg(c->VA);
+		return;
+	case TAC_CALL:
+		cg_call(c->LB->VA->VAL1, c->VA,c->VC);
+		return;
+	case TAC_RETURN:
+		cg_return(c->VA);
+		return;
+	case TAC_LABEL:
+		flush_all();
+		printf("     L%d:\n", c->VA->VAL1);
+		return;
+	case TAC_VAR:
+                if (num_args<=0)
+		{
+			c->VA->ADDR2 = tos; /* FP offset for local variable */
+			tos += -4;
+               		printf("          SUBL2 #4, SP\n");
+		}
+		else
+		{
+			c->VA->ADDR2 = num_args * 4; /* AP offset */
+			num_args = num_args - 1;
+		}
+		return;
+	case TAC_BEGINFUNC:
+                printf("\n          .ENTRY %s, 0\n", c->VA->TEXT1);
+                if (first_flag==1)
+		   { first_procedure_name = c->VA->TEXT1;
+                     c->VA->VAL2 = 0; 
+		   };
+                num_args = c->VA->VAL2;
+		tos = VAR_OFF;
+		return;
+	case TAC_ENDFUNC:
+		cg_return(NULL);
+		return;
+	default:
+		error("unknown TAC opcode to translate");
+		return;
+	}
+}
+
+cg_bin(op, a, b, c)
+char * op;
+SYMB * a;
+SYMB * b;
+SYMB * c;
+{
+	int cr = get_rreg(c);
+	int br = get_areg(b, cr);
+	printf("          %s R%d,R%d\n", op, br, cr);
+	clear_desc(cr);
+	insert_desc(cr, a, MODIFIED);
+}
+
+cg_binw(op, a, b, c)
+char * op;
+SYMB * a;
+SYMB * b;
+SYMB * c;
+{
+	int cr = get_rreg(c);
+	int br = get_areg(b, cr);
+	printf("          %s R%d,R%d,R%d\n", op, cr, br, cr);
+	clear_desc(cr);
+	insert_desc(cr, a, MODIFIED);
+}
+
+
+cg_copy(a,b)
+/*  KGS alteration, fix subtle bug */
+SYMB * a;
+SYMB * b;
+{
+	int br = get_rreg(b);
+	int x;
+
+	for(x=R_GEN; x<R_MAX; x++)
+	   if( rdesc[x].name == a )
+		clear_desc(x);
+
+	insert_desc(br, a, MODIFIED);
+}
+
+
+
+cg_read(a)
+SYMB * a;
+{
+	int r = get_areg(a);
+        printf("          READVAR R%d\n", r);
+}
+
+cg_cond(op, a, l)
+char * op;
+SYMB * a;
+int l;
+{
+	spill_all();
+	if (a != NULL)
+	{
+		int r;
+		for( r=R_GEN; r<R_MAX; r++)
+			if (rdesc[r].name == a)
+				break;
+		if( r<R_MAX)
+			load_reg(r, a);
+		else
+			(void)get_rreg(a);
+	}
+	printf("          %s L%d\n", op, l);
+}
+
+cg_arg(a)
+SYMB * a;
+{
+        int r;
+        next_arg++;
+	switch(a->type)
+	{
+	case T_TEXT:
+             printf("          PUSHAL L%d\n", a->VAL2);
+             break;
+        case T_INT:
+	     printf("          PUSHL #%d\n", a->VAL1);
+             break;
+        case T_VAR:
+             r = get_rreg(a);
+             printf("          PUSHL R%d\n",r);
+             break;
+	}
+}
+
+cg_call(f, res, fct)
+int f;
+SYMB * res;
+SYMB * fct;
+{
+	flush_all();
+        spill_one(R_RES);
+        if (f==2)
+         printf("          CALLS #%d, PRINTNUM\n", next_arg);
+        else if (f==4) 
+         printf("          CALLS #%d, PRINTSTR\n", next_arg);
+        else        
+          { printf( "          CALLS #%d, %s\n", next_arg, fct->TEXT1);
+            fct->VAL2 = next_arg;
+          }
+	next_arg = 0;
+
+	if (res != NULL)
+		insert_desc(R_RES, res, MODIFIED);
+}
+
+cg_return(a)
+SYMB * a;
+{
+	if(a != NULL)
+	{
+		spill_one(R_RES);
+		load_reg(R_RES, a);
+	}
+
+        if (first_flag==1)
+            {printf("\n          $EXIT_S\n\n");
+             first_flag=0;
+	    }
+	  else
+            printf("          RET\n");
+}
+
+cg_sys(fn)
+char * fn;
+{
+	FILE * fd = fopen(fn, "r");
+	int c;
+	if (fd==NULL)
+		error("cannot open system file");
+	while((c=getc(fd)) != EOF)
+		putchar(c);
+	fclose(fd);
+}
+
+cg_strings()
+{
+	int i;
+	for (i=0; i<HASHSIZE; i++)
+	{
+		SYMB * sl;
+		for(sl = symbtab[i]; sl != NULL; sl = sl->next)
+			if(sl->type == T_TEXT)
+				cg_str(sl);
+	}
+}
+
+cg_str(s)
+SYMB * s;
+{
+        int count;
+	char * t = s->TEXT1;
+	int i;
+	printf("     L%d:\n", s->VAL2);
+        count = 0;
+	i = 0;
+        while (t[i] != EOS)
+	{
+		if (t[i]=='\\') 
+			if(t[i+1]=='\"')
+				count++;	
+		i++;
+	}
+        printf("          .BYTE %d\n", i-2-count);          
+
+	for(i=1; t[i+1] != EOS; i++)
+		if( t[i] == '\\')
+			switch( t[++i])
+			{
+			case 'n':
+				printf("          .BYTE 10, 13\n");
+				break; 
+			case '\"':
+				printf("          .BYTE %d\n", '\"');
+				break; 
+			}
+		else
+			printf("          .BYTE %d\n", t[i]);
+}
+
+flush_all()
+{
+	int r;
+	spill_all();
+	for(r=R_GEN; r<R_MAX; r++)
+		clear_desc(r);
+}
+
+spill_all()
+{
+	int r;
+	for(r=R_GEN; r<R_MAX; r++)
+		spill_one(r);
+}
+
+spill_one(r)
+int r;
+{
+	if (rdesc[r].modified)
+	{ if (rdesc[r].name->ADDR2 < 0)
+		printf("          MOVL R%d, %d(FP)\n", r, 
+				rdesc[r].name->ADDR2);
+          else
+		printf("          MOVL R%d, %d(AP)\n", r, 
+				rdesc[r].name->ADDR2);
+
+          rdesc[r].modified = UNMODIFIED;
+	}
+}
+
+load_reg(r, n)
+int r;
+SYMB * n;
+{
+	int s;
+	for(s=0; s<R_MAX; s++)
+	   if (rdesc[s].name == n)
+	   {
+		printf("          MOVL R%d, R%d\n", s, r);
+		insert_desc(r, n, rdesc[s].modified);
+		return;
+	   }
+	switch(n->type)
+	{
+	case T_INT:
+		printf("          MOVL #%d,R%d\n", n->VAL1, r);
+		break;
+	case T_VAR:
+                if (n->ADDR2 < 0)
+           		printf("          MOVL %d(FP),R%d\n", n->ADDR2, r);
+	        else
+           		printf("          MOVL %d(AP),R%d\n", n->ADDR2, r);
+        	break;
+	case T_TEXT:
+		printf("          MOVAL L%d,R%d\n", n->VAL2, r);
+		break;
+	}
+	insert_desc(r, n, UNMODIFIED);
+}
+
+clear_desc(r)
+/* KGS alteration, subtle bug */
+int r;
+{
+	rdesc[r].name = NULL;
+	rdesc[r].modified = UNMODIFIED;
+}
+
+insert_desc(r, n, mod)
+int r;
+SYMB * n;
+int mod;
+{
+	rdesc[r].name = n;
+	rdesc[r].modified = mod;
+}
+
+int get_rreg(c)
+SYMB * c;
+{
+	int r;
+	for(r=R_GEN; r<R_MAX; r++)
+		if(rdesc[r].name == c)
+		{
+			spill_one(r);
+			return r;
+		}
+	for(r=R_GEN; r<R_MAX; r++)
+		if(rdesc[r].name == NULL)
+		{
+			load_reg(r, c);
+			return r;
+		}
+	for(r=R_GEN; r<R_MAX; r++)
+		if(!rdesc[r].modified)
+		{
+			clear_desc(r);
+			load_reg(r,c);
+			return r;
+		}
+	spill_one(R_GEN);
+	clear_desc(R_GEN);
+	load_reg(R_GEN, c);
+	return R_GEN;
+}
+
+int get_areg(b, cr)
+SYMB * b;
+int cr;
+{
+	int r;
+	for(r=0; r<R_MAX; r++)
+		if(rdesc[r].name == b)
+			return r;
+	for(r=R_GEN; r<R_MAX; r++)
+		if(rdesc[r].name == NULL)
+		{
+			load_reg(r, b);
+			return r;
+		}
+	for(r=R_GEN; r<R_MAX; r++)
+		if(!rdesc[r].modified && (r != cr))
+		{
+			clear_desc(r);
+			load_reg(r,b);
+			return r;
+		}
+	for(r=R_GEN; r<R_MAX; r++)
+		if(r != cr)
+		{
+			spill_one(r);
+			clear_desc(r);
+			load_reg(r,b);
+			return r;
+		}
+}
+//E*O*F cgvax.c//
+
+echo x - headervax.
+mv headervax. headervax..old
+cat > "headervax." << '//E*O*F headervax.//'
+;
+;         Standard prolog
+;
+;     VAX MACRO assembly code
+;
+//E*O*F headervax.//
+
+echo x - libvax.
+mv libvax. libvax..old
+cat > "libvax." << '//E*O*F libvax.//'
+;
+;         End of run routine
+;
+
+;
+;	Control block for using VAX VMS Queue I/O system macros
+;
+
+iotrm:   .ascid /sys$input:/
+iochn:   .blkw 1
+iobuf:   .blkb 512
+iolen:   .long
+
+;
+;	Print a string  
+;
+
+	.entry printstr, ^m<r5, r6, r7, r8>
+        movl 4(ap), r5				;get string address
+        incl r5					;point to first letter
+        movzbl @4(ap), r6			;save string length
+        movl r6, r8				;  in r8
+        moval iobuf, r7
+lab1:   movb (r5)+, (r7)+			;copy string to buffer
+        sobgeq  r6, lab1
+	$assign_s devnam = iotrm chan = iochn	;assign i/o channel
+	$qiow_s efn = #1 chan = iochn -		;output buffer
+	func = #io$_writevblk p1 =iobuf  p2=r8
+	$dassgn_s chan = iochn			;deassign i/o channel
+        ret
+
+;
+;	Print a number
+;
+
+	.entry printnum, ^m<r5,r6,r7,r8,r9,r10,r11>
+    	movl 4(ap), r5				;get number
+	clrl r9					;counter=0
+lab2:	divl3 #10, r5,r6			;extract rightmost digit
+	mull3 #10, r6, r7
+	subl3 r7, r5,r8
+	pushl r8				;save rightmost digit
+	incl r9					;increment counter
+	movl r6,r5
+	bneq lab2				;get remaining digits
+	moval iobuf, r10
+        movl r9, iolen
+lab3:	popl r11				;retrieve digit
+	addl2 #48, r11				;add ascii bias #48
+	movb r11, (r10)+			;store in buffer
+	sobgtr r9, lab3				;get remaining digits
+	$assign_s devnam = iotrm chan = iochn	;output buffer string
+	$qiow_s efn = #1 chan = iochn -
+	func = #io$_writevblk p1=iobuf p2=iolen
+	$dassgn_s chan = iochn
+	ret
+//E*O*F libvax.//
+
+echo x - mainvax.c
+mv mainvax.c mainvax.c.old
+cat > "mainvax.c" << '//E*O*F mainvax.c//'
+22 Nov 88 JPB
+26 Apr 89 JPB  
+28 May 91 KGS : quick and dirty fix of mktmp */
+
+#include "stdio.h"
+#include "ctype.h"
+#include "vc.h"
+#include "parservax.h"   /* builds slightly different TAC for if-thens */
+
+#define 	CONST_MAX 5
+#define		LAB_MIN	  10
+
+extern	char		yytext[];
+extern  int    		yyleng;
+extern	YYSTYPE		yyval;
+extern  char            * ts (s,str);     /* KGS addition */
+extern  int             yydebug;
+
+SYMB	 * symbtab[HASHSIZE];
+TAC	 * library[LIB_MAX];
+int	   next_tmp;
+int	   next_label;
+
+SYMB	* const_tab[CONST_MAX];
+int       errors_found;
+SYMB    * symb_list;
+ENODE   * enode_list;
+
+main ()
+{
+	yydebug = 1;
+	init_vc();
+	(void) yyparse();
+	if ( !errors_found )
+		cg( yyval.tac );
+}
+
+init_vc ()
+{
+	int i;
+	symb_list = NULL;
+	enode_list = NULL;
+	errors_found = FALSE;
+	next_tmp = 0;
+	next_label = LAB_MIN;
+
+	for( i=0; i< HASHSIZE; i++)
+		symbtab[i] = NULL;
+
+   	for( i=0; i < CONST_MAX; i++)
+	{
+		SYMB * c = get_symb();
+		c->type	=T_INT;
+		c->VAL1	= i;
+		const_tab[i] = c;
+	}
+	library[LIB_PRINTN] = mktac(TAC_LABEL, mklabel(2), NULL, NULL);
+	library[LIB_PRINTS] = mktac(TAC_LABEL, mklabel(4), NULL, NULL);
+}
+
+SYMB * mkconst(n)
+ int n;
+{
+	if ( (n>=0) && (n < CONST_MAX))
+		return const_tab[n];
+	else
+	{
+		SYMB * c = get_symb();
+		c->type	 = T_INT;
+		c->VAL1  = n;
+		return c;
+	}
+}
+
+SYMB * mklabel(l)
+ int l;
+{
+	SYMB * t = get_symb();
+	t->type = T_LABEL;
+	t->VAL1  = l;
+}
+
+SYMB * mktmp ()
+/*  new version to remove parsing bug */
+{
+        char text[5];
+	SYMB *t;
+	char *s;
+        int leng;
+	sprintf(text, "T%d", next_tmp++);
+	leng = strlen(text);
+	s = (char *) safe_malloc(leng + 1);	
+	strncpy(s, text, leng);
+	s[leng] = EOS;
+	t	 = get_symb();
+	t->type  = T_VAR;
+	t->TEXT1 = s;
+	insert(t);
+        return t;
+}
+
+
+
+SYMB * get_symb()
+{
+	SYMB * t;
+	if (symb_list != NULL)
+	{
+		t = symb_list;
+		symb_list = symb_list->next;
+	}
+	else t = (SYMB *) safe_malloc( sizeof(SYMB));
+	return t;
+}
+
+free_symb(s)
+ SYMB * s;
+{	
+	s->next = symb_list;
+	symb_list = s;
+}
+
+ENODE * get_enode()
+{
+	if (enode_list != NULL)
+	{
+		ENODE * expr;
+		expr = enode_list;
+		enode_list = expr->next;
+		return expr;
+	}
+	else
+		return (ENODE *) safe_malloc(sizeof(ENODE));
+}
+
+free_enode (expr)
+ENODE * expr;
+{
+	expr->next = enode_list;
+	enode_list = expr;
+}
+
+void * safe_malloc(n)
+int n;
+{
+  return malloc(n);
+/*
+        void * t =(void *) malloc(n);
+	if (t==NULL)
+	{
+		error("malloc() failed");
+		exit(0);
+	}
+	return t;
+
+*/
+}
+
+TAC * mktac(op,a,b,c)
+int op;
+SYMB * a;
+SYMB * b;
+SYMB * c;
+{
+	TAC * t = (TAC *) safe_malloc(sizeof(TAC));
+	t->next	= NULL;
+	t->prev	= NULL;
+	t->op	= op;
+	t->VA	= a;
+	t->VB 	= b;
+	t->VC 	= c;
+	return t;
+}
+
+TAC * join_tac(c1,c2)
+TAC * c1;
+TAC * c2;
+{
+	TAC * t;
+	if( c1 == NULL) return c2;
+        if( c2 == NULL) return c1;
+	t = c2;
+	while( t->prev != NULL)
+		t = t->prev;
+	t->prev = c1;
+	return c2;
+}
+
+insert(s)
+SYMB * s;
+{
+	int hv = hash(s->TEXT1);
+	s->next = symbtab[hv];
+	symbtab[hv] = s;
+}
+
+int hash(s)
+char * s;
+{
+	int hv = 0;
+	int i;
+	for( i=0; s[i] != EOS; i++)
+	{
+		int v = (hv >> 28) ^ (s[i] & 15);
+		hv = (hv << 4) | v ;
+	}
+	hv = hv & 5000;
+	return hv % HASHSIZE;
+}
+
+SYMB * lookup(s)
+char * s;
+{
+	int hv = hash(s);
+	SYMB * t = symbtab[hv];
+	while (t != NULL)
+		if(strcmp( t->TEXT1, s)==0)
+			break;
+		else
+			t = t->next;
+	return t;
+}
+
+print_instr(i)
+TAC * i;
+{
+	char sa[12];
+	char sb[12];
+	char sc[12];
+	printf(" ",i);
+	switch (i->op)
+	{
+	case TAC_UNDEF:
+		printf("undef\n");
+		break;
+	case TAC_ADD:
+		printf("%s := %s + %s\n", ts(i->VA, sa), ts(i->VB,sb),
+				          ts(i->VC, sc));
+		break;
+	case TAC_SUB:
+		printf("%s := %s - %s\n", ts(i->VA, sa), ts(i->VB,sb),
+				          ts(i->VC, sc));
+		break;
+	case TAC_MUL:
+		printf("%s := %s * %s\n", ts(i->VA, sa), ts(i->VB,sb),
+				          ts(i->VC, sc));
+		break;
+	case TAC_DIV:
+		printf("%s := %s / %s\n", ts(i->VA,sa), ts(i->VB, sb),
+				          ts(i->VC, sc));
+		break;
+	case TAC_NEG:
+		printf("%s := - %s\n", ts(i->VA, sa), ts(i->VB,sb));
+		break;
+	case TAC_COPY:
+		printf("%s := %s\n", ts(i->VA, sa), ts(i->VB,sb));
+		break;
+	case TAC_GOTO:
+		printf("goto L%d\n", i->LA->VA->VAL1);
+		break;
+	case TAC_IFZ:
+		printf("ifz %s goto L%d\n", ts(i->VB, sb), i->LA->VA->VAL1);
+		break;
+	case TAC_IFNZ:
+		printf("ifnz %s goto L%d\n", ts(i->VB, sb), i->LA->VA->VAL1);
+		break;
+	case TAC_ARG:
+		printf("arg %s\n", ts(i->VA, sa));
+		break;
+	case TAC_CALL:
+		if(i->VA == NULL)
+			printf("call L%d\n", i->LB->VA->VAL1);
+		else
+	        printf("%s = call L%d\n", ts(i->VA, sa), i->LB->VA->VAL1);
+		break;
+	case TAC_RETURN:
+		printf("return %s\n", ts(i->VA, sa));
+		break;
+	case TAC_LABEL:
+		printf("label L%d\n", i->VA->VAL1);
+		break;
+	case TAC_VAR:
+		printf("var %s\n", ts(i->VA, sa));
+		break;
+	case TAC_BEGINFUNC:
+		printf("beginfunc\n");
+		break;
+	case TAC_ENDFUNC:
+		printf("endfunc\n");
+		break;
+	default:
+		error("unknown TAC opcode");
+		printf("unknown %d\n", i->op);
+		break;
+	}
+	fflush (stdout);
+}
+
+char * ts (s,str)
+ SYMB * s;
+ char * str;
+{
+	if(s==NULL)
+		return "NULL";
+	switch(s->type)
+	{
+	case T_FUNC:
+	case T_VAR:
+		return s->TEXT1;
+	case T_TEXT:
+		sprintf(str, "L%d", s->VAL2);
+		return str;
+	case T_INT:
+		sprintf(str, "%d", s->VAL1);
+		return str;
+	default:
+		error("unknown TAC arg type");
+		return "?";
+	}
+}
+
+
+error(str)
+char * str;
+{
+	fprintf(stderr, "vc: %s\n", str);
+	errors_found = TRUE;
+}
+//E*O*F mainvax.c//
+
+echo x - parservax.h
+mv parservax.h parservax.h.old
+cat > "parservax.h" << '//E*O*F parservax.h//'
+typedef union 
+{
+	SYMB	* symb;
+	TAC	* tac;
+	ENODE	* enode;
+} YYSTYPE;
+extern YYSTYPE yylval;
+# define FUNC 257
+# define VARIABLE 258
+# define ASSIGN_SYMBOL 259
+# define INTEGER 260
+# define PRINT 261
+# define TEXT 262
+# define RETURN 263
+# define CONTINUE 264
+# define IF 265
+# define THEN 266
+# define ELSE 267
+# define FI 268
+# define WHILE 269
+# define DO 270
+# define DONE 271
+# define VAR 272
+# define UMINUS 273
+//E*O*F parservax.h//
+
+echo x - parservax.y
+mv parservax.y parservax.y.old
+cat > "parservax.y" << '//E*O*F parservax.y//'
+16 Nov 88 JPB
+26 Apr 89 JPB
+27 Jul 89 JPB
+28 May 91 KGS :   ; builds slightly different TAC for if-then  */
+
+%{
+#include "stdio.h"
+#include "ctype.h"
+#include "vc.h"
+
+%}
+
+%union
+{
+	SYMB	* symb;
+	TAC	* tac;
+	ENODE	* enode;
+}
+
+%token		FUNC
+%token <symb>	VARIABLE
+%token		ASSIGN_SYMBOL
+%token <symb>	INTEGER
+%token		PRINT
+%token <symb>	TEXT
+%token		RETURN
+%token		CONTINUE
+%token		IF
+%token		THEN
+%token		ELSE
+%token		FI
+%token		WHILE
+%token		DO
+%token		DONE
+%token		VAR
+%token		UMINUS
+
+%type <tac>	program
+%type <tac>	function_list
+%type <tac>	function
+%type <tac>	parameter_list
+%type <tac>	variable_list
+%type <enode>	argument_list
+%type <enode>	expression_list
+%type <tac>	statement
+%type <tac>	assignment_statement
+%type <enode>	expression
+%type <tac>	print_statement
+%type <tac>	print_list
+%type <tac>	print_item
+%type <tac>	return_statement
+%type <tac>	null_statement
+%type <tac>	if_statement
+%type <tac>	while_statement
+%type <tac>	block
+%type <tac>	declaration_list
+%type <tac>	declaration
+%type <tac>	statement_list
+%type <tac>	error
+
+%left '+' '-'
+%left '*' '/'
+%right UMINUS
+
+%%
+
+
+program			: function_list
+			;
+function_list		: function
+			| function_list function
+			  {$$ = join_tac($1, $2);}
+			;
+function		: FUNC VARIABLE '(' parameter_list ')' statement
+			  {
+				 /*  next_tmp = 0;  */ 
+				$$ = do_func($2, $4, $6);}
+			| error
+			  { error("Bad function syntax");
+			    $$ = NULL; }
+			;
+parameter_list		: variable_list
+			|
+			  { $$ = NULL; }
+			;
+variable_list		: VARIABLE
+			  { $$ = declare_var($1); }
+			| variable_list ',' VARIABLE
+			  { TAC * t = declare_var($3);
+			    t->prev = $1;
+			    $$ = t; }
+			;
+statement		:	assignment_statement
+			|	return_statement
+			|	print_statement
+			|	null_statement
+			|	if_statement
+			|	while_statement
+			|	block
+			|	error
+				{ error("Bad statement syntax");
+				  $$ = NULL; }
+			;
+assignment_statement	:  VARIABLE ASSIGN_SYMBOL expression
+                            {  $$ = do_assign($1, $3); }
+			;
+expression		:	expression '+' expression
+				{ $$ = do_bin(TAC_ADD, $1, $3); }
+			|	expression '-' expression
+				{ $$ = do_bin(TAC_SUB, $1, $3); }
+			|	expression '*' expression
+				{ $$ = do_bin(TAC_MUL, $1, $3); }
+			|	expression '/' expression
+				{ $$ = do_bin(TAC_DIV, $1, $3); }
+			|	'-' expression %prec UMINUS
+				{ $$ = do_un(TAC_NEG, $2); }
+			|	'(' expression ')'
+				{ $$ = $2; }
+			|	INTEGER
+				{ $$ = mkenode(NULL, $1, NULL); }
+			|	VARIABLE
+				{ $$ = mkenode(NULL, $1, NULL); }
+			|	VARIABLE '(' argument_list ')'
+				{ $$ = do_fnap($1, $3); }
+			|	error
+				{  error("Bad expression syntax");
+				   $$ = mkenode(NULL, NULL, NULL); }
+			;
+argument_list		:	{  $$ = NULL; }
+			|	expression_list
+			;
+expression_list		:	expression
+			|	expression_list ',' expression
+				{ $1->next = $3;
+				  $$       = $1; }
+			;
+print_statement		:	PRINT print_list
+				{  $$ = $2; }
+			;
+print_list		:	print_item
+			|	print_list ',' print_item
+				{ $$ = join_tac($1, $3); }
+			;
+print_item		:	expression
+				{ $$ = join_tac($1->tac,
+						do_lib(LIB_PRINTN,
+							$1->res));}
+			|  	TEXT
+				{ $$ = do_lib(LIB_PRINTS, $1); }
+			;
+return_statement	:	RETURN expression
+				{TAC * t = mktac(TAC_RETURN, $2->res,
+							NULL,NULL);
+				 t->prev = $2->tac;
+				 free_enode($2);
+				 $$ = t; }
+			;
+null_statement		:	CONTINUE
+				{ $$ = NULL; }
+			;
+if_statement		:	IF expression THEN statement FI
+				{ $$ = do_if($2, $4); }
+			|	IF expression THEN statement ELSE 
+				statement FI
+				{ $$ = do_test($2, $4, $6); }
+			;
+while_statement		:	WHILE expression DO statement DONE
+				{ $$ = do_while($2, $4); }
+			;
+block			:	'{' declaration_list statement_list '}'
+				{ $$ = join_tac($2, $3); }
+			;
+declaration_list	:
+				{ $$ = NULL; }
+			|	declaration_list declaration
+				{ $$ = join_tac($1, $2); }
+			;
+declaration		:	VAR variable_list
+				{ $$ = $2; }
+			;
+statement_list		:	statement
+			| 	statement_list statement
+				{ $$ = join_tac($1, $2); }
+			;
+
+
+%%
+
+
+ENODE * mkenode( next, res, code)
+ENODE * next;
+SYMB * res;
+TAC * code;
+{
+	ENODE * expr = get_enode();
+	expr->next = next;
+	expr->res  = res;
+	expr->tac  = code;
+	return expr;
+}
+
+TAC * do_func(func, args, code)
+SYMB * func;
+TAC * args;
+TAC * code;
+{
+	TAC * tlist;
+	TAC * tlab;
+	TAC * tbegin;
+	TAC * tend;
+
+	if(func->type != T_UNDEF)
+	{
+		error("function already declared");
+		return NULL;
+	}
+	tlab   = mktac(TAC_LABEL,	mklabel(next_label++), NULL, NULL);
+	tbegin = mktac(TAC_BEGINFUNC,	func, NULL, NULL);
+	tend   = mktac(TAC_ENDFUNC,	NULL, NULL, NULL);
+
+	code         = join_tac(args, code);
+	tend->prev   = join_tac(tbegin, code);
+	tlist        = func->LABEL2;
+	while (tlist != NULL)
+	{
+		TAC * tnext = tlist->LB;
+		tlist->LB  = tlab;
+		tlist      = tnext;
+	}
+	func->type = T_FUNC;
+	func->LABEL2 = tlab;
+	return tend;
+}
+
+TAC * declare_var( var)
+ SYMB * var;
+{
+	if (var->type != T_UNDEF)
+	{
+		error("variable already declared" );
+		return NULL;
+	}
+	var->type = T_VAR;
+	var->ADDR2 = -1;
+	return mktac(TAC_VAR, var, NULL, NULL);
+}
+
+TAC * do_assign( var, expr)
+SYMB * var;
+ENODE * expr;
+{
+	TAC * code;
+	if (var->type != T_VAR)
+		error("assignment to non-variable");
+	code         = mktac(TAC_COPY, var, expr->res, NULL);
+	code->prev   = expr->tac;
+	free_enode(expr);
+	return code;
+}
+
+ENODE * do_bin( binop, expr1, expr2)
+int binop;
+ENODE * expr1;
+ENODE * expr2;
+{
+	TAC * temp;
+	TAC * res;
+	if((expr1->ETYPE == T_INT) && (expr2->ETYPE == T_INT))
+	{
+		switch(binop)
+		{
+		case TAC_ADD:
+			expr1->EVAL1 = expr1->EVAL1 + expr2->EVAL1;
+			break;
+		case TAC_SUB:
+			expr1->EVAL1 = expr1->EVAL1 - expr2->EVAL1;
+			break;
+		case TAC_MUL:
+			expr1->EVAL1 = expr1->EVAL1 * expr2->EVAL1;
+			break;
+		case TAC_DIV:
+			expr1->EVAL1 = expr1->EVAL1 / expr2->EVAL1;
+			break;
+		}
+		free_symb(expr2->res);
+		free_enode(expr2);
+		return expr1;
+	}
+	temp		= mktac(TAC_VAR, mktmp(), NULL, NULL);
+	temp->prev	= join_tac(expr1->tac, expr2->tac);
+	res		= mktac(binop, temp->VA, expr1->res, expr2->res);
+	res->prev	= temp;
+	expr1->res	= temp->VA;
+	expr1->tac	= res;
+	free_enode(expr2);
+	return expr1;
+}
+
+ENODE * do_un( unop, expr)
+int unop;
+ENODE * expr;
+{
+	TAC * temp;
+	TAC * res;
+	if(expr->ETYPE == T_INT)
+	{
+		switch(unop)
+		{
+		case TAC_NEG:
+			expr->EVAL1 = - expr->EVAL1 ;
+			break;
+		}
+		
+		return expr;
+	}
+	temp		= mktac(TAC_VAR, mktmp(), NULL, NULL);
+	temp->prev	= expr->tac;
+	res		= mktac(unop, temp->VA, NULL, expr->res);
+	res->prev	= temp;
+	expr->res	= temp->VA;
+	expr->tac 	= res;
+	return		expr;
+}
+
+ENODE * do_fnap( func, arglist)
+SYMB * func;
+ENODE * arglist;
+{
+	ENODE	* alt;
+	SYMB	* res;
+	TAC	* code;
+	TAC	* temp;
+	if((func->type != T_UNDEF) && (func->type != T_FUNC))
+	{
+		error("function declared other than function");
+		return NULL;
+	}
+	res	= mktmp();
+	code	= mktac(TAC_VAR, res, NULL, NULL);
+	for (alt = arglist; alt != NULL; alt = alt->next)
+		code = join_tac(code, alt->tac);
+	while (arglist != NULL)
+	{
+		temp 	= mktac(TAC_ARG, arglist->res, NULL, NULL);
+		temp->prev = code;
+		code 	= temp;
+		alt	= arglist->next;
+		free_enode(arglist);
+		arglist = alt;
+	};
+
+	temp 	= mktac(TAC_CALL,res, (SYMB *)func->LABEL2, func);
+	temp->prev = code;
+	code = temp;
+	if(func->type == T_UNDEF)
+		func->LABEL2 = code;
+
+	return mkenode(NULL, res, code);
+}
+
+TAC * do_lib( rtn, arg)
+int rtn;
+SYMB *arg;
+{
+	TAC * a = mktac(TAC_ARG, arg, NULL, NULL);
+	TAC * c = mktac(TAC_CALL, NULL, (SYMB *)library[rtn], NULL);
+	c->prev	= a;
+	return c;
+}
+
+TAC * do_if( expr, stmt)
+/*    KGS version:  Altered because VAX 
+      conditional branching is limited to 256 bytes
+*/
+ENODE * expr;
+TAC * stmt;
+{
+	TAC * label1 = mktac(TAC_LABEL, mklabel(next_label++), NULL,NULL);
+	TAC * label2 = mktac(TAC_LABEL, mklabel(next_label++), NULL,NULL);
+	TAC * label3 = mktac(TAC_LABEL, mklabel(next_label++), NULL,NULL);
+	TAC * g1     = mktac(TAC_GOTO,  (SYMB *)label3, NULL,NULL);
+	TAC * g2     = mktac(TAC_GOTO,  (SYMB *)label1, NULL,NULL);
+	TAC * code  = mktac(TAC_IFZ, (SYMB *)label2, expr->res, NULL);
+	code->prev	= expr->tac;
+        g1->prev        = code;
+        label2->prev    = g1;
+	g2->prev        = label2;
+        label3->prev    = g2;
+	code		= join_tac(label3, stmt);
+	label1->prev	= code;
+	free_enode(expr);
+	return label1;
+}
+
+TAC * do_test( expr, stmt1, stmt2)
+ENODE * expr;
+TAC * stmt1;
+TAC * stmt2;
+{
+	TAC * label1	 = mktac(TAC_LABEL,mklabel(next_label++),NULL,NULL);
+	TAC * label2	 = mktac(TAC_LABEL,mklabel(next_label++),NULL,NULL);
+	TAC * code1	 = mktac(TAC_IFZ, (SYMB *)label1, expr->res, NULL);
+	TAC * code2	 = mktac(TAC_GOTO,(SYMB *)label2, NULL, NULL);
+
+	code1->prev	= expr->tac;
+	code1		= join_tac(code1, stmt1);
+	code2->prev	= code1;
+	label1->prev	= code2;
+	label1		= join_tac(label1, stmt2);
+	label2->prev	= label1;
+	free_enode(expr);
+	return label2;
+}
+
+
+TAC * do_while(expr, stmt)
+ENODE * expr;
+TAC * stmt;
+{
+	TAC * label  = mktac(TAC_LABEL, mklabel(next_label++), NULL, NULL);
+	TAC * code   = mktac(TAC_GOTO, (SYMB *)label, NULL, NULL);
+	code->prev	= stmt;
+	return join_tac(label, do_if(expr, code));
+}
+
+
+yyerror( str)
+char * str;
+{
+	error(str);
+}
+
+//E*O*F parservax.y//
+
+echo x - scannervax.l
+mv scannervax.l scannervax.l.old
+cat > "scannervax.l" << '//E*O*F scannervax.l//'
+16 Nov 88 JPB
+26 Apr 89 JPB
+25 Apr 89 JPB 
+28 May 91 KGS : no significant changes, just include vax parser */
+
+
+#include "stdio.h"
+#include "ctype.h"
+#include "vc.h"
+#include "parservax.h"   /* builds slightly different TAC for "if-then" */
+
+%}
+
+comment		"//".*
+delimiter	[ \t\n]
+whitespace	{delimiter}+
+uc_letter	[A-Z]
+lc_letter	[a-z]
+letter		{lc_letter}|{uc_letter}
+ascii_char	[^\"\n]
+escaped_char	\\n|\\\"
+digit		[0-9]
+variable	{lc_letter}({lc_letter}|{digit})*
+integer		{digit}+
+text		\"({ascii_char}|{escaped_char})*\"
+
+%%
+
+{comment}	; { }
+{whitespace}	; { }
+{variable}	{ mkname();
+		  return VARIABLE; }
+{integer}	{ mkval();
+		  return INTEGER;}
+{text}		{ mktext();
+		  return TEXT;}
+":="		{ return ASSIGN_SYMBOL;}
+FUNC		{ return FUNC;}
+PRINT 		{ return PRINT;}
+RETURN 		{ return RETURN;}
+CONTINUE	{ return CONTINUE;}
+IF 		{ return IF;}
+THEN 		{ return THEN;}
+ELSE		{ return ELSE;}
+FI 		{ return FI;}
+WHILE 		{ return WHILE;}
+DO 		{ return DO;}
+DONE 		{ return DONE;}
+VAR 		{ return VAR;}
+.		{ return yytext[0]; }	;added to text listing, p 190
+
+
+%%
+
+
+
+mkname ()
+{
+	struct symb *t;
+	char	    *s;
+
+	if((t = lookup(yytext)) != NULL)
+	{
+		yylval.symb = t;
+		return;
+	}
+
+	s = (char *) safe_malloc(yyleng + 1);
+	
+	strncpy(s, yytext, yyleng);
+	s[yyleng] = EOS;
+
+	t	 = get_symb();
+	t->type  = T_UNDEF;
+	t->TEXT1 = s;
+
+	insert(t);
+	yylval.symb = t;
+}
+
+
+mkval()
+{
+	yylval.symb = mkconst( atoi( yytext ));
+}
+
+mktext()
+{
+	mkname();
+	yylval.symb->type = T_TEXT;
+	yylval.symb->VAL2 = next_label++;
+}
+//E*O*F scannervax.l//
+
+echo x - testvax.out
+mv testvax.out testvax.out.old
+cat > "testvax.out" << '//E*O*F testvax.out//'
+;         MACHINE CODE
+;
+;         Standard prolog
+;
+;     VAX MACRO assembly code
+;
+
+          .ENTRY mainguy, 0
+          SUBL2 #4, SP
+          MOVL #0,R8
+          MOVL R8, -4(FP)
+     L13:
+          SUBL2 #4, SP
+          MOVL -4(FP),R8
+          MOVL #11,R9
+          SUBL3 R8,R9,R8
+          MOVL R8, -8(FP)
+          MOVL R8, R8
+          BEQL L15
+          JMP L16
+     L15:
+          JMP L14
+     L16:
+          PUSHAL L10
+          CALLS #1, PRINTSTR
+          MOVL -4(FP),R8
+          PUSHL R8
+          CALLS #1, PRINTNUM
+          PUSHAL L11
+          CALLS #1, PRINTSTR
+          SUBL2 #4, SP
+          MOVL -4(FP),R8
+          PUSHL R8
+          CALLS #1, f
+          MOVL R7, R8
+          PUSHL R8
+          MOVL R8, -12(FP)
+          MOVL R7, -12(FP)
+          CALLS #1, PRINTNUM
+          PUSHAL L12
+          CALLS #1, PRINTSTR
+          SUBL2 #4, SP
+          MOVL #1,R8
+          MOVL -4(FP),R9
+          ADDL2 R9,R8
+          MOVL R8, -16(FP)
+          MOVL R8, -4(FP)
+          JMP L13
+     L14:
+
+          $EXIT_S
+
+
+          .ENTRY f, 0
+          MOVL 4(AP),R8
+          BEQL L18
+          SUBL2 #4, SP
+          SUBL2 #4, SP
+          MOVL #1,R9
+          SUBL3 R9,R8,R9
+          MOVL R9, -8(FP)
+          PUSHL R9
+          CALLS #1, f
+          SUBL2 #4, SP
+          MOVL R7, R8
+          MOVL 4(AP),R9
+          MULL2 R9,R8
+          MOVL R7, -4(FP)
+          MOVL R8, R7
+          RET
+          MOVL R8, -12(FP)
+          JMP L19
+     L18:
+          MOVL R7, -12(FP)
+          MOVL #1,R7
+          RET
+     L19:
+          RET
+;
+;         End of run routine
+;
+
+;
+;	Control block for using VAX VMS Queue I/O system macros
+;
+
+iotrm:   .ascid /sys$input:/
+iochn:   .blkw 1
+iobuf:   .blkb 512
+iolen:   .long
+
+;
+;	Print a string  
+;
+
+	.entry printstr, ^m<r5, r6, r7, r8>
+        movl 4(ap), r5				;get string address
+        incl r5					;point to first letter
+        movzbl @4(ap), r6			;save string length
+        movl r6, r8				;  in r8
+        moval iobuf, r7
+lab1:   movb (r5)+, (r7)+			;copy string to buffer
+        sobgeq  r6, lab1
+	$assign_s devnam = iotrm chan = iochn	;assign i/o channel
+	$qiow_s efn = #1 chan = iochn -		;output buffer
+	func = #io$_writevblk p1 =iobuf  p2=r8
+	$dassgn_s chan = iochn			;deassign i/o channel
+        ret
+
+;
+;	Print a number
+;
+
+	.entry printnum, ^m<r5,r6,r7,r8,r9,r10,r11>
+    	movl 4(ap), r5				;get number
+	clrl r9					;counter=0
+lab2:	divl3 #10, r5,r6			;extract rightmost digit
+	mull3 #10, r6, r7
+	subl3 r7, r5,r8
+	pushl r8				;save rightmost digit
+	incl r9					;increment counter
+	movl r6,r5
+	bneq lab2				;get remaining digits
+	moval iobuf, r10
+        movl r9, iolen
+lab3:	popl r11				;retrieve digit
+	addl2 #48, r11				;add ascii bias #48
+	movb r11, (r10)+			;store in buffer
+	sobgtr r9, lab3				;get remaining digits
+	$assign_s devnam = iotrm chan = iochn	;output buffer string
+	$qiow_s efn = #1 chan = iochn -
+	func = #io$_writevblk p1=iobuf p2=iolen
+	$dassgn_s chan = iochn
+	ret
+
+     L10:
+          .BYTE 3
+          .BYTE 102
+          .BYTE 40
+          .BYTE 32
+     L12:
+          .BYTE 2
+          .BYTE 10, 13
+     L11:
+          .BYTE 5
+          .BYTE 32
+          .BYTE 41
+          .BYTE 32
+          .BYTE 61
+          .BYTE 32
+
+
+          .end mainguy
+//E*O*F testvax.out//
+
+echo x - testvax.res
+mv testvax.res testvax.res.old
+cat > "testvax.res" << '//E*O*F testvax.res//'
+f( 0 ) = 1
+f( 1 ) = 1
+f( 2 ) = 2
+f( 3 ) = 6
+f( 4 ) = 24
+f( 5 ) = 120
+f( 6 ) = 720
+f( 7 ) = 5040
+f( 8 ) = 40320
+f( 9 ) = 362880
+f( 10 ) = 3628800
+//E*O*F testvax.res//
+
+echo x - testvax.tac
+mv testvax.tac testvax.tac.old
+cat > "testvax.tac" << '//E*O*F testvax.tac//'
+;          THREE ADDRESS CODE
+
+;   beginfunc
+;   var i
+;   i := 0
+;   label L13
+;   var T0
+;   T0 := 11 - i
+;   ifz T0 goto L15
+;   goto L16
+;   label L15
+;   goto L14
+;   label L16
+;   arg L10
+;   call L4
+;   arg i
+;   call L2
+;   arg L11
+;   call L4
+;   var T1
+;   arg i
+;   T1 = call L20
+;   arg T1
+;   call L2
+;   arg L12
+;   call L4
+;   var T2
+;   T2 := i + 1
+;   i := T2
+;   goto L13
+;   label L14
+;   endfunc
+;   beginfunc
+;   var n
+;   ifz n goto L18
+;   var T4
+;   var T3
+;   T3 := n - 1
+;   arg T3
+;   T4 = call L20
+;   var T5
+;   T5 := n * T4
+;   return T5
+;   goto L19
+;   label L18
+;   return 1
+;   label L19
+;   endfunc
+//E*O*F testvax.tac//
+
+echo x - testvax.vsl
+mv testvax.vsl testvax.vsl.old
+cat > "testvax.vsl" << '//E*O*F testvax.vsl//'
+FUNC mainguy()
+{
+	VAR i
+	i := 0
+        WHILE 11 - i
+        DO
+        {
+           PRINT "f( ", i, " ) = ", f(i), "\n"
+           i := i + 1
+        }
+        DONE
+}
+
+FUNC f(n)
+	IF n
+        THEN
+	   RETURN n * f(n-1)
+        ELSE
+           RETURN 1
+        FI
+//E*O*F testvax.vsl//
+
+exit 0

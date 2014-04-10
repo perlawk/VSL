@@ -1,0 +1,165 @@
+#! /bin/sh
+# This is a shell archive, meaning:
+# 1. Remove everything above the #! /bin/sh line.
+# 2. Save the resulting text in a file.
+# 3. Execute the file with /bin/sh (not csh) to create the files:
+#	expr.vsl
+#	fact.vsl
+#	fib.vsl
+#	form.vsl
+#	opt.vsl
+#	stuck.vsl
+# This archive created: Sun May 26 20:34:31 1991
+export PATH; PATH=/bin:$PATH
+if test -f 'expr.vsl'
+then
+	echo shar: will not over-write existing file "'expr.vsl'"
+else
+cat << \SHAR_EOF > 'expr.vsl'
+FUNC expr() {
+  VAR a, b, c, d
+  
+  a := 1
+  b := a + 1
+  c := 4
+  d := (a * b * b / 2 + c) * (c + a * b / 2 * b)
+  PRINT "The expression evaluates to ", d, ".\n"
+}
+SHAR_EOF
+fi # end of overwriting check
+if test -f 'fact.vsl'
+then
+	echo shar: will not over-write existing file "'fact.vsl'"
+else
+cat << \SHAR_EOF > 'fact.vsl'
+FUNC fact()
+{
+  VAR i, n, f
+  i := 0
+  WHILE 11 - i DO {
+    n := i
+    f := 1
+    WHILE n DO {
+      f := f * n
+      n := n - 1
+    }
+    DONE
+    PRINT "f( ", i, " ) = ", f, "\n"
+    i := i + 1
+  }
+  DONE
+}
+SHAR_EOF
+fi # end of overwriting check
+if test -f 'fib.vsl'
+then
+	echo shar: will not over-write existing file "'fib.vsl'"
+else
+cat << \SHAR_EOF > 'fib.vsl'
+FUNC fib() {
+  VAR n, i, l1, l2, f
+  n := 1
+  WHILE 26 - n DO {
+    i  := 2
+    l1 := 1
+    l2 := 1
+    IF n - 1 THEN {
+      WHILE n - i DO {
+        VAR t
+        t  := l1
+        l1 := l2
+        l2 := l1 + t
+        i  := i + 1
+      }
+      DONE
+      f := l2
+    }
+    ELSE
+      f := 1
+    FI
+    PRINT "fib(", n, ") = ", f, "\n"
+    n := n + 1
+  }
+  DONE
+}
+SHAR_EOF
+fi # end of overwriting check
+if test -f 'form.vsl'
+then
+	echo shar: will not over-write existing file "'form.vsl'"
+else
+cat << \SHAR_EOF > 'form.vsl'
+FUNC form() {
+  VAR r, pin, pid
+  
+  r := 1
+  pin := 157
+  pid := 50
+  
+  WHILE 11 - r DO {
+    
+    PRINT "A circle of radius ", r, " has circumference "
+    PRINT 2 * pin * r / pid
+    PRINT " and area ", pin * r * r / pid, ".\n"
+    PRINT "A sphere of radius ", r, " has surface area "
+    PRINT 4 * pin * r * r / pid
+    PRINT " and volume ", 4 * pin * r * r * r / (pid * 3), ".\n\n"
+    
+    r := r + 1
+  }
+  DONE
+}
+SHAR_EOF
+fi # end of overwriting check
+if test -f 'opt.vsl'
+then
+	echo shar: will not over-write existing file "'opt.vsl'"
+else
+cat << \SHAR_EOF > 'opt.vsl'
+FUNC peephole()
+{
+  VAR a, b, c
+  
+  b := 1  
+  a := b + 0
+  a := 0 - b
+  a := b - 0
+  a := b * 0
+  a := b * 1
+  a := b * 2
+  a := 0 / b
+  a := b / 1
+  a := c + b
+}
+SHAR_EOF
+fi # end of overwriting check
+if test -f 'stuck.vsl'
+then
+	echo shar: will not over-write existing file "'stuck.vsl'"
+else
+cat << \SHAR_EOF > 'stuck.vsl'
+FUNC stuck() {
+  VAR count, i, n, half
+  i := 1
+  WHILE 51 - i DO {
+    n := i
+    count := 0
+    WHILE n - 1 DO {
+      count := count + 1
+      half := n / 2
+        IF n - half * 2 THEN
+          n := n * 3 + 1
+        ELSE
+          n := n / 2
+        FI
+    }
+    DONE
+    PRINT "stuck(", i, ") = ", count, ".\n"
+    i := i + 1
+  }
+  DONE
+}
+SHAR_EOF
+fi # end of overwriting check
+#	End of shell archive
+exit 0

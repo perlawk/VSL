@@ -1,0 +1,109 @@
+#
+# A combined Makefile to build the VC compiler, VAS assembler and VAM
+# simulator.
+#
+#    make <component>
+#
+# where component is vc, vas or vam as appropriate.
+#
+#
+# Modifications:
+# ==============
+#
+# 14 Jan 96: Combined makefile for 2nd edition publication
+
+
+# Specify the compiler, scanner and parser generators and the flags
+
+CC    = gcc
+YACC  = bison
+LEX   = flex
+
+# Specify some flags
+
+CFLAGS    = -g -ansi -pedantic -DDJGPP
+YACCFLAGS = -d -y
+LEXFLAGS  = 
+LDFLAGS   = -lbison -lflex
+
+# Now the rules for generating one from the other
+
+.y.c:
+	$(YACC) $(YACCFLAGS) $*.y
+	copy /b y_tab.c $*.c
+	copy /b y_tab.h $*.h
+	del y_tab.c
+	del y_tab.h
+
+.l.c:
+	$(LEX) $(LEXFLAGS) $*.l
+	copy /b lexyy.c $*.c
+	del lexyy.c
+
+.c.o:
+	$(CC) -c $(CFLAGS) $*.c
+
+
+# The compiler files involved
+
+HDRS = vc.h \
+       parser.h
+
+CSRCS = main.c \
+        cg.c
+
+SRCS = $(CSRCS) \
+       scanner.c \
+       parser.c
+
+OBJS = main.o \
+       parser.o \
+       scanner.o \
+       cg.o
+
+
+# Create everything for DOS
+
+dos: vc.exe vas.exe vam.exe
+
+vc.exe: vc
+	copy /b c:\djgpp\bin\stub.exe+vc vc.exe
+
+vas.exe: vas
+	copy /b c:\djgpp\bin\stub.exe+vas vas.exe
+
+vam.exe: vam
+	copy /b c:\djgpp\bin\stub.exe+vam vam.exe
+
+
+# Create a new compiler
+
+vc: $(OBJS)
+	$(CC) $(CFLAGS) $(OBJS) $(LDFLAGS) -o vc
+
+
+# Create a new VAS assembler
+
+vas: vas.o
+	$(CC) $(CFLAGS) vas.o -o vas
+
+
+# Create a new VAM simulator
+
+vam: vam.o
+	$(CC) $(CFLAGS) vam.o -o vam
+
+
+# Compiler source file dependencies
+
+main.o: main.c vc.h parser.h
+scanner.c: scanner.l
+scanner.o: scanner.c vc.h parser.h
+parser.c parser.h: parser.y
+parser.o: parser.c vc.h parser.h
+cg.o: cg.c vc.h
+
+# Assembler source file dependencies
+
+vas.o: vas.h
+vas.c vas.h: vas.y

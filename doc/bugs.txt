@@ -1,0 +1,149 @@
+This file is a list of known bugs in the VSL system. It documents changes that
+have been made to the listing as given in the book. I have credited the first
+known detector of the bug.
+
+13 Jun 1990:  (R C Shaw, Praxis Systems). The function cg() on p209, refers to
+              "header" and "lib" in the calls to cg_sys. These files must thus
+              be in the directory in which the compiler is run. The compiler is
+              now modified to #define LIB_DIR in vc.h, being the name of the
+              directory in which to find these files. The calls to cg_sys have
+              been changed to use LIB_DIR in cg.c.
+
+13 Jun 1990:  The function mklabel in main.c failed to return a result. The
+              line:
+
+                 return t ;
+
+              has been added to fix this.
+
+14 Jun 1990:  (Alan Barnes, Aston University). The automatic distribution
+              program had a mistake in its Awk script. This meant it may not
+              have worked with some mailers, in particular VAX VMS machines.
+              Now fixed.
+
+ 3 May 1991:  (Jonathan Johnson, johnsonj@mathcs.carleton.edu). The function
+              fib(n) on page 169 does not generate Fibonacci numbers. A correct
+              version would be:
+
+                 FUNC fib( n )
+                 {
+                   VAR i, l1, l2
+                 
+                   i  := 2
+                   l1 := 1
+                   l2 := 1
+                 
+                   IF n - 1
+                   THEN
+                   {
+                     WHILE n - i
+                     DO
+                     {
+                       VAR t
+                 
+                       t  := l1
+                       l1 := l2
+                       l2 := l1 + t
+                       i  := i + 1
+                     }
+                     DONE
+                     RETURN l2
+                   }
+                   ELSE
+                     RETURN 1
+                   FI
+                 }
+
+ 3 May 1991:  (Jonathan Johnson, johnsonj@mathcs.carleton.edu). The search
+              loops in cg_cond and load_reg (which it calls) conflict and may
+              end up loading a special register which appears to match. The
+              solution adopted is just to load the register into itself
+              straightway.
+
+ 3 May 1991:  (Jonathan Johnson, johnsonj@mathcs.carleton.edu and Ken
+              Schweller, Buena Vista College). mktmp( void ) creates a new
+              temporary name, using yytext and yylval. Unfortunately at this
+              stage, yylval may still hold a value yet to be shifted onto the
+              stack, and under these circumstances the wrong item (viz the new
+              temporary variable) may be shifted. One solution is not to use
+              yylval at all (Ken Schweller), the other is to save and restore
+              it (Jonathan Johnson). I have adopted the latter approach. Note
+              that the destruction of yytext is not something we need worry
+              about.
+
+ 3 May 1991:  (Jonathan Johnson, johnsonj@mathcs.carleton.edu, Michael
+              Haberler, University of Economics and Business Administration,
+              Vienna and Richard Tearle, Hatfield). fprintf is missing its
+              first argument in four places in vam.c. Now corrected.
+
+ 3 May 1991:  (Richard Tearle, Hatfield). The documentation for the TRAP
+              instruction in vam.doc referred to printing our R0, rather than
+              R15. This has been changed, so vam.doc is consistent with the
+              book and code.
+
+ 9 May 1991:  (Jeremy Bennett). Declaration of malloc changed to char* for
+              pre-ANSI versions of YACC, which declare it as such.
+
+ 9 May 1991:  (Jeremy Bennett). Character constant '"' changed to '\"' for ANSI
+              consistency in vas.y.
+
+26 Jun 1991:  (Jonathan Johnson, johnsonj@mathcs.carleton.edu). Optimising code
+              generator supplied.
+
+16 Aug 1991:  (Ken Schweller, Buena Vista College, Iowa, schweller@bvc.edu).
+              Version of code generator which generates VAX MACRO supplied.
+
+22 Aug 1991:  (S Lyon, lyons@uk.ac.pcl.sun). The function do_bin overwrote the
+              value of small constants (less than CONST_MAX) when constant
+              folding. Now it creates a new node, irrespective of the size of
+              constant.
+
+13 Feb 1992:  (Dave Redman, Crosfield Electronics Ltd, djhr@crosfield.co.uk).
+              opt.shar is too large for some mailers. Now also available in two
+              smaller chunks, opt-1.shar and opt-2.shar.
+
+28 Apr 1992:  (Paul Daly, Bath University, ma9prd@bath.ac.uk). The vam
+	        interpreter incorrectly handles negative offsets. In particular
+              this stopped constant folding of negative numbers working. Now
+              fixed by using || instead of + in calculating the offset value.
+
+15 Sep 1992:  (Subhasish Mazumdar, mazumdar@edu.utsa.cs.ringer; Devon Bowen,
+              bowen@edu.buffalo.cs). Both spotted the mistake in the
+              previous bug fix. | is the bitwise or operator, not ||. This is
+              what comes of fixing bugs in exam term. Now fixed.
+
+ 7 Jan 1993:  (Various people). The automatic distribution system died between
+              30 Dec 1992 and 7 Jan 1993. If you asked for some code and it
+              didn't arrive back during that period, please try again. Cause
+              was a disc crash over the Christmas holday period.
+
+ 7 Jan 1993:  (Various people). main.c is now included in the general
+              distribution, in response to send: or send: all as it always
+              should have been.
+
+10 Dec 1993:  (Andrew Dunford, University of Westminster, qdiec@uk.ac.wmin).
+              Declaration of duplicate variables in a list, caused a
+              segmentation fault, since declare_var in parser.y returns NULL in
+              these circumstances. Fixed (and simplified) by using join_tac.
+
+10 Dec 1993:  (Andrew Dunford, University of Westminster, qdiec@uk.ac.wmin). In
+              the case where an expression is just a variable, there is no
+              checking that the variable is actually declared. This leads to an
+              obscure "unknown TAC argument type" later on. This is fixed with
+              an explicit check in parser.y. Note this already happens in
+              do_assign and do_fnap. Fixed with an error message, and
+              substituting constant zero as the value for the expression.
+
+18 Jan 1994:  (Jamie Roots, Bath University). The comment in cg.c at the
+              top of cg_arg is ambiguous. For clarity it should read "... We
+              load the argument into a register, and then write it onto the new
+              stack frame, which is two words past the current top of stack..."
+
+
+Happy programming. Bug reports to jpb=compiler-bugs please.
+
+Jeremy Bennett                          Tel:   +44 225 826891
+School of Mathematical Sciences         Telex: 449097 UOBATH G
+University of Bath                      Fax:   +44 225 62508 (Group 3)
+Bath, BA2 7AY, England                  Email: jpb@maths.bath.ac.uk
+

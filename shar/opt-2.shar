@@ -1,0 +1,2583 @@
+
+# This is a shell archive.  Remove anything before this line, then
+# unpack it by saving it in a file and typing "sh file".  (Files
+# unpacked will be owned by you and have default permissions.)
+#
+# This archive contains:
+# cg.c
+# optimize.c
+
+echo x - cg.c
+mv cg.c cg.c.old
+cat > "cg.c" << '//E*O*F cg.c//'
+/******************************************************************************
+*******************************************************************************
+
+
+                                CCCCC    GGGGGG 
+                               CCCCCCC  GGGGGGGG
+                              CC        GG      
+                              CC        GG  GGGG
+                              CC        GG    GG
+                              CC        GG    GG
+                               CCCCCCC  GGGGGGGG
+                                CCCCC    GGGGGG 
+
+
+*******************************************************************************
+*******************************************************************************
+
+			      A Compiler for VSL
+			      ==================
+
+   This is the code generator section
+
+   Modifications:
+   ==============
+
+   22 Nov 88 JPB:  First version
+   26 Apr 89 JPB:  Version for publication
+    1 Aug 89 JPB:  Final version for publication
+   13 Jun 90 JPB:  Now refers to library directory (noted by R C Shaw, Praxis).
+
+*******************************************************************************
+******************************************************************************/
+
+
+#include <stdio.h>
+#include <ctype.h>
+#include "vc.h"
+
+/* Constants used here. First we define some of the registers. We reserve
+   register R1 as the stack pointer and use registers R2 - R4 in the calling
+   and return sequences. */
+
+#define R_ZERO          0		 /* Constant zero */
+#define R_P             1		 /* Stack pointer */
+#define R_CALL          2		 /* Address of called routine */
+#define R_RET           3		 /* Return address */
+#define R_RES           4		 /* Result reg and last reserved */
+#define R_GEN           5		 /* First general purpose register */
+#define R_MAX          16		 /* 16 regs */
+
+/* The stack frame holds the dynamic link at offset zero and the return address
+   at offset 4. */
+
+#define P_OFF           0                /* Offset of stack pointer on frame */
+#define PC_OFF          4                /* Offset of ret address on frame */
+#define VAR_OFF         8                /* Offset of variables on frame */
+
+/* To make the code clearer we define flags MODIFIED and UNMODIFIED as TRUE and
+   FALSE respectively for setting the mod field of the register descriptor. */
+
+#define MODIFIED     TRUE		 /* Entries for descriptors */
+#define UNMODIFIED  FALSE
+
+/* These are static variables used throughout this section. The register
+   descriptor is an array of anonymous structures with a field to hold the most
+   recent item slaved in the register and a field to mark whether the register
+   has been modified since last written to memory.
+
+   "tos" is the top of stack in the current function and "next_arg" is the
+   number of the next argument to load on the stack. */
+
+struct			 		 /* Reg descriptor */
+{
+	struct symb *name ;		 /* Thing in reg */
+	int          modified ;		 /* If needs spilling */
+}    rdesc[R_MAX] ;
+int  tos ;				 /* Top of stack */
+int  next_arg ;				 /* Next argument to load */
+
+/* These are the prototypes of routines defined here. Routines to translate TAC
+   instructions generally have the form "cg_xxx()" where xxx is the name of a
+   TAC instruction of group of TAC instructions. */
+
+void  cg( TAC *tl ) ;
+TAC  *init_cg( TAC *tl ) ;
+void  cg_instr( TAC *c ) ;
+void  cg_bin( char *op,
+	      SYMB *a,
+	      SYMB *b,
+	      SYMB *c ) ;
+void  cg_copy( SYMB *a,
+	       SYMB *b ) ;
+void  cg_cond( char *op,
+	       SYMB *a,
+	       int   l ) ;
+void  cg_arg( SYMB *a ) ;
+void  cg_call( int   f,
+	       SYMB *res ) ;
+void  cg_return( SYMB *a ) ;
+void  cg_sys( char *fn ) ;
+void  cg_strings( void ) ;
+void  cg_str( SYMB *s ) ;
+void  flush_all( void ) ;
+void  spill_all( void ) ;
+void  spill_one( int  r ) ;
+void  load_reg( int   r,
+		SYMB *n ) ;
+void  clear_desc( int   r ) ;
+void  insert_desc( int   r,
+		   SYMB *n,
+		   int   mod ) ;
+int   get_rreg( SYMB *c ) ;
+int   get_areg( SYMB *b,
+	       int   cr ) ;
+
+
+void  cg( TAC *tl )
+
+/* The code generator is initialised by "cg_init()", finding the start of the
+   TAC list in the process (since the syntax analysis phase has given us the
+   end of the list, and the code generator works from the start of the list).
+
+   We first copy a header file to the output containing initialisation code and
+   then loop generating code for each TAC instruction. The code is preceded by
+   a comment line in the assembler giving the TAC instruction being translated.
+   After generating code for the TAC, we copy the library file and then
+   generate code for all the text strings used in the program.
+
+   Note that in the book the header and lib files are just referred to as
+   "header" and "lib", thus assuming that they will be in the same directory
+   that the compiler is run in. We have included a #defined library path here
+   for greater flexibility. */
+
+{
+	TAC *tls = init_cg( tl ) ;              /* Start of TAC */
+
+        if( optiflag )
+          optimize( tls ) ;                     /* Do the optimization */
+
+	cg_sys( LIB_DIR "header" ) ;		 /* Standard header */
+
+	for( ; tls != NULL ; tls = tls->next )  /* Instructions in turn */
+	{
+		printf( "\\ " ) ;
+		print_instr( tls ) ;
+		cg_instr( tls ) ;
+	}
+
+	cg_sys( LIB_DIR "lib" ) ;		 /* Library */
+	cg_strings() ;				 /* String data */
+
+}	/* void  cg( TAC *tl ) */
+
+
+TAC *init_cg( TAC *tl )
+
+/* Initialisation involves clearing the register descriptors (apart from zero
+   in R0), setting the top of stack and next_arg indices and clearing the free
+   lists for address and register descriptors. We finally find the end of the
+   TAC list, setting .cb next fields in the TAC as we do so. */
+
+{
+	int  r ;
+        TAC *c ;			 /* Current TAC instruction */
+	TAC *p ;			 /* Previous TAC instruction */
+
+	for( r = 0 ; r < R_MAX ; r++ )
+		rdesc[r].name = NULL ;
+
+	insert_desc( 0, mkconst( 0 ), UNMODIFIED ) ;	 /* R0 holds 0 */
+
+	tos      = VAR_OFF ; 		 /* TOS allows space for link info */
+	next_arg = 0 ;			 /* Next arg to load */
+
+	/* Tidy up and reverse the code list */
+
+	c = NULL ;			 /* No current */
+	p = tl ;			 /* Preceding to do */
+
+	while( p != NULL )
+	{
+		p->next = c ;		 /* Set the next field */
+		c       = p ;		 /* Step on */
+		p       = p->prev ;
+	}
+
+	return c ;
+
+}	/* TAC *init_cg( TAC *tl ) */
+
+
+void  cg_instr( TAC *c )
+
+/* Generate code for a single TAC instruction. This is just a switch on all
+   possible TAC instructions. Hopefully if we have written the front end
+   correctly the default case will never be encountered. For most cases we just
+   call a subsidiary routine "cg_xxx()" to do the code generation. */
+
+{
+	switch( c->op )
+	{
+	case TAC_UNDEF:
+
+		error( "cannot translate TAC_UNDEF" ) ;
+		return ;
+
+	case TAC_ADD:
+
+		cg_bin( "ADD", c->VA, c->VB, c->VC ) ;
+		return ;
+
+	case TAC_SUB:
+
+		cg_bin( "SUB", c->VA, c->VB, c->VC ) ;
+		return ;
+
+	case TAC_MUL:
+
+		cg_bin( "MUL", c->VA, c->VB, c->VC ) ;
+		return ;
+
+	case TAC_DIV:
+
+		cg_bin( "DIV", c->VA, c->VB, c->VC ) ;
+		return ;
+
+	case TAC_NEG:
+
+		cg_bin( "SUB", c->VA, mkconst( 0 ), c->VB ) ;
+		return ;
+
+	case TAC_COPY:
+
+		cg_copy( c->VA, c->VB ) ;
+		return ;
+
+	case TAC_GOTO:
+
+		cg_cond( "BRA", NULL, c->LA->VA->VAL1 ) ;
+		return ;
+
+	case TAC_IFZ:
+
+		cg_cond( "BZE", c->VB, c->LA->VA->VAL1 ) ;
+		return ;
+
+	case TAC_IFNZ:
+
+		cg_cond( "BNZ", c->VB, c->LA->VA->VAL1 ) ;
+		return ;
+
+	case TAC_ARG:
+
+		cg_arg( c->VA ) ;
+		return ;
+
+	case TAC_CALL:
+
+		cg_call( c->LB->VA->VAL1, c->VA ) ;
+		return ;
+
+	case TAC_RETURN:
+
+		cg_return( c->VA ) ;
+		return ;
+
+	case TAC_LABEL:
+
+		/* We generate an appropriate label. Note that we must flush
+ 		   the register descriptor, since control may arrive at this
+		   label from other points in the code. */
+
+		flush_all() ;
+		printf( "L%d:\n", c->VA->VAL1 ) ;
+		return ;
+
+	case TAC_VAR:
+
+		/* Allocate 4 bytes for this variable to hold an integer on the
+		   current top of stack */
+
+		c->VA->ADDR2 = tos ;
+		tos += 4 ;
+		return ;
+
+	case TAC_BEGINFUNC:
+
+		/* At the start of a function we must copy the return address
+		   which will be in R_RET onto the stack. We reset the top of
+		   stack, since it is currently empty apart from the link
+		   information. */
+
+		tos = VAR_OFF ;
+		printf( "       STI  R%d,%d(R%d)\n", R_RET, PC_OFF, R_P ) ;
+		return ;
+
+	case TAC_ENDFUNC:
+
+		/* At the end of the function we put in an implicit return
+		   instruction. */
+
+		cg_return( NULL ) ;
+		return ;
+
+	default:
+
+		/* Don't know what this one is */
+
+		error( "unknown TAC opcode to translate" ) ;
+		return ;
+	}
+
+}	/* void  cg_instr( TAC *c ) */
+
+
+void  cg_bin( char *op,			 /* Opcode to use */
+	      SYMB *a,			 /* Result */
+	      SYMB *b,			 /* Operands */
+	      SYMB *c )
+
+/* Generate code for a binary operator
+
+      a := b op c
+
+   VAM has 2 address opcodes with the result going into the second operand
+
+   This is a typical code generation functions. We find and load a separate
+   register for each argument, the second argument also being used for the
+   result. We then generate the code for binary operator, updating the register
+   descriptor appropriately. */
+
+{
+	int  cr = get_rreg( c ) ;	 /* Result register */
+	int  br = get_areg( b, cr ) ;	 /* Second argument register */
+
+	printf( "       %s  R%d,R%d\n", op, br, cr ) ;
+
+	/* Delete c from the descriptors and insert a */
+
+	clear_desc( cr ) ;
+	insert_desc( cr, a, MODIFIED ) ;
+
+}	/* void  cg_bin( char *op,
+	  	         SYMB *a,
+	      		 SYMB *b,
+	      		 SYMB *c ) */
+
+
+void  cg_copy( SYMB *a,
+	       SYMB *b )
+
+/* Generate code for a copy instruction
+
+      a := b
+
+   We load b into an register, then update the descriptors to indicate that a
+   is also in that register. We need not do the store until the register is
+   spilled or flushed. */
+
+{
+	int  br = get_rreg( b ) ;   	 /* Load b into a register */
+
+	insert_desc( br, a, MODIFIED ) ; /* Indicate a is there */
+
+}	/* void  cg_copy( SYMB *a,
+		       	  SYMB *b ) */
+
+
+void  cg_cond( char *op,
+	       SYMB *a,			 /* Condition */
+	       int   l )		 /* Branch destination */
+
+/* Generate for "goto", "ifz" or "ifnz". We must spill registers before the
+   branch. In the case of unconditional goto we have no condition, and so "b"
+   is NULL. We set the condition flags if necessary by explicitly loading "a"
+   into a register to ensure the zero flag is set. A better approach would be
+   to keep track of what is in the status register, so saving this load. */
+
+{
+	spill_all() ;
+
+	if( a != NULL )
+	{
+		int  r ;
+
+		for( r = R_GEN ; r < R_MAX ; r++ )   /* Is it in reg? */
+			if( rdesc[r].name == a )
+				break ;
+
+		if( r < R_MAX )
+
+                        /* Reload into existing reg */
+                        /* Don't use load_reg since it updates rdesc */
+
+                        printf( "       LDR  R%d,R%d\n", r, r ) ;
+		else
+			(void)get_rreg( a ) ;  /* Load into new register */
+	}
+
+	printf( "       %s  L%d\n", op, l ) ;   /* Branch */
+
+}	/* void  cg_cond( char *op,
+	     	          SYMB *a,
+	     		  int   l ) */
+
+
+void  cg_arg( SYMB *a )
+
+/* Generate for an ARG instruction. We load the argument into a register, and
+   then write it onto the new stack frame, which is 2 past the current top of
+   stack. We keep track of which arg this is in the global variable "next_arg".
+   We assume that ARG instructions are always followed by other ARG
+   instructions or CALL instructions. */
+
+{
+	int  r  = get_rreg( a ) ;
+
+	printf( "       STI  R%d,%d(R%d)\n", r, tos + VAR_OFF + next_arg,
+		R_P ) ;
+	next_arg += 4 ;
+
+}	/* void  cg_arg( SYMB *a ) */
+
+
+void  cg_call( int   f,
+	       SYMB *res )
+
+/* The standard call sequence is
+
+      LDA  f(R0),R2
+      STI  R1,tos(R1)
+      LDA  tos(R1),R1
+      BAL  R2,R3
+    ( STI  R4,res )
+
+   We flush out the registers prior to a call and then execute the standard
+   CALL sequence. Flushing involves spilling modified registers, and then
+   clearing the register descriptors. We use BAL to do the call, which means
+   R_RET will hold the return address on entry to the function which must be
+   saved on the stack. After the call if there is a result it will be in R_RES
+   so enter this in the descriptors.  We reset "next_arg" before the call,
+   since we know we have finished all the arguments now. */
+
+{
+	flush_all() ;
+	next_arg = 0 ;
+	printf( "       LDA  L%d,R%d\n", f, R_CALL ) ;
+	printf( "       STI  R%d,%d(R%d)\n", R_P, tos, R_P ) ;
+	printf( "       LDA  %d(R%d),R%d\n", tos, R_P, R_P ) ;
+	printf( "       BAL  R%d,R%d\n", R_CALL, R_RET ) ;
+
+	if( res != NULL )		      /* Do a result if there is one */
+		insert_desc( R_RES, res, MODIFIED ) ;
+
+}	/* void  cg_call( int   f,
+		          SYMB *res ) */
+
+
+void  cg_return( SYMB *a )
+
+/* The standard return sequence is
+
+    ( LDI  a,R4 )
+      LDI  4(R1),R2    return program counter
+      LDI  0(R1),R1    return stack pointer
+      BAL  R2,R3
+
+   If "a" is NULL we don't load anything into the result register.
+*/
+
+{
+	if( a != NULL )
+	{
+		spill_one( R_RES ) ;
+		load_reg( R_RES, a ) ;
+	}
+
+	printf( "       LDI  %d(R%d),R%d\n", PC_OFF, R_P, R_CALL ) ;	
+	printf( "       LDI  %d(R%d),R%d\n", P_OFF, R_P, R_P ) ;	
+	printf( "       BAL  R%d,R%d\n", R_CALL, R_RET ) ;	
+
+}	/* void  cg_return( SYMB *a ) */
+
+
+void  cg_sys( char *fn )		 /* File name */
+
+/* This routine is used to copy standard header and library files into the
+   generated code. */
+
+{
+	FILE *fd = fopen( fn, "r" ) ; /* The library file */
+	int  c ;
+
+	if( fd == NULL )
+	{
+		error( "cannot open system file" ) ;
+		exit( 0 ) ;
+	}
+
+	while((c = getc( fd )) != EOF )
+		putchar( c ) ;
+
+	fclose( fd ) ;
+
+}	/* void  cg_sys( char *fn ) */
+
+
+void  cg_strings( void )
+
+/* This routine runs through the symbol table at the end of code generation to
+   find all the strings, calling "cg_str()" to generate each string as a series
+   of bytes declarations. It finally generates label zero to mark the end of
+   code. */
+
+{
+	int  i ;
+
+	for( i = 0 ; i < HASHSIZE ; i++)   /* Find all symbol table chains */
+	{
+		SYMB *sl ;
+
+		for( sl = symbtab[i] ; sl != NULL ; sl = sl->next )
+			if( sl->type == T_TEXT )
+				cg_str( sl ) ;
+	}
+
+	printf( "L0:\n" ) ;
+
+}	/* void  cg_strings( void ) */
+
+
+void  cg_str( SYMB *s )
+
+/* Generate bytes for this string. Ignore the quotes and translate escapes */
+
+{
+	char *t = s->TEXT1 ;		 /* The text */
+	int   i ;
+
+	printf( "L%d:\n", s->VAL2 ) ;	 /* Label for the string */
+
+	for( i = 1 ; t[i + 1] != EOS ; i++ )
+		if( t[i] == '\\' )
+			switch( t[++i] )
+			{
+				case 'n':
+
+					printf( "       DB   %d\n", '\n' ) ;
+					break ;
+
+				case '\"':
+
+					printf( "       DB   %d\n", '\"' ) ;
+					break ;
+			}
+		else
+			printf( "       DB   %d\n", t[i] ) ;
+
+	printf( "       DB   0\n" ) ;	 /* End of string */
+
+}	/* void  cg_str( SYMB *s ) */
+
+
+/* These are the support routines for the code generation. "flush_all()' is
+   used to write all modified registers and clear the registers at points where
+   their validity can not be guaranteed (after labels and function calls).
+   "spill_all()" is used to write all modified registers at points where we
+   wish memory to be consistent (prior to a branch).  "spill_one()" is used to
+   write a specific register out if it is modified. */
+
+
+void  flush_all( void )
+
+/* Spill all registers, and clear their descriptors */
+
+{
+	int  r ;
+
+	spill_all() ;
+
+	for( r = R_GEN ; r < R_MAX ; r++ )   /* Clear the descriptors */
+		clear_desc( r ) ;
+
+}	/* void  flush_all( void ) */
+
+
+void  spill_all( void )
+
+/* Spill all the registers */
+
+{
+	int  r ;
+
+	for( r = R_GEN ; r < R_MAX ; r++ )
+		spill_one( r ) ;
+
+}	/* spill_all( void ) */
+
+
+void  spill_one( int  r )
+
+/* Spill the value in register r if it's modifed */
+
+{
+	if( rdesc[r].modified )
+	{
+		printf( "       STI  R%d,%d(R%d)\n", r, rdesc[r].name->ADDR2,
+			R_P ) ;
+		rdesc[r].modified = UNMODIFIED ;
+	}
+
+}	/* void  spill_one( int  r ) */
+
+
+void  load_reg( int   r,		 /* Register to be loaded */
+		SYMB *n )		 /* Name to load */
+
+/* "load_reg()" loads a value into a register. If the value is in a different
+   register it uses LDR. If it is a constant it uses LDA indexed off R0 and if
+   a piece of text, the address of the text is loaded with LDA. Variables are
+   loaded from the stack with LDI.
+
+   We update the register descriptor accordingly */
+
+{
+	int  s ;
+
+	/* Look for a register */
+
+	for( s = 0 ; s < R_MAX ; s++ )	
+		if( rdesc[s].name == n )
+		{
+			printf( "       LDR  R%d,R%d\n", s, r ) ;
+			insert_desc( r, n, rdesc[s].modified ) ;
+			return ;
+		}
+
+	/* Not in a reg. Load appropriately */
+
+	switch( n->type )
+	{
+	case T_INT:
+
+		printf( "       LDA  %d(R0),R%d\n", n->VAL1, r ) ;
+		break ;
+
+	case T_VAR:
+
+		printf( "       LDI  %d(R%d),R%d\n", n->ADDR2, R_P, r ) ;
+		break ;
+
+	case T_TEXT:
+
+		printf( "       LDA  L%d,R%d\n", n->VAL2, r ) ;
+		break ;
+	}
+
+	insert_desc( r, n, UNMODIFIED ) ;
+
+}	/* void  load_reg( int   r,
+			   SYMB *n ) */
+
+
+/* We have two routines to handle the register descriptor. "clear_desc()"
+   removes any slave information in a register, "insert_desc()" inserts slave
+   information. */
+
+
+void  clear_desc( int   r )		 /* Register to delete */
+
+/* Clear the descriptor for register r */
+
+{
+	rdesc[r].name = NULL ;
+
+}	/* void  clear_desc( int   r ) */
+
+
+void  insert_desc( int   r,
+		   SYMB *n,
+		   int   mod )
+
+/* Insert a descriptor entry for the given name. */
+
+{
+	rdesc[r].name     = n ;
+	rdesc[r].modified = mod ;
+
+}	/* void  insert_desc( int   r,
+		   	      SYMB *n,
+		   	      int   mod ) */
+
+
+/* These two routines implement the simple register allocation algorithm
+   described in chapter 10. "get_rreg()" gets a register that will hold an
+   operand and be overwritten by a result. "get_areg()" gets a register that
+   will hold an operand that will no be overwritten. */
+
+
+int  get_rreg( SYMB *c )
+
+/* Get a register to hold the result of the computation
+
+      a := b op c
+
+   This must initially hold c and will be overwritten with a. If c is already
+   in a register we use that, spilling it first if necessary, otherwise we
+   chose in order of preference from
+
+      An empty register
+      An unmodified register
+      A modified register
+
+   In the last case we spill the contents of the register before it is used. If
+   c is not in the given result register we load it. Clearly we cannot use R0
+   for this purpose, even if c is constant zero. We also avoid using the
+   reserved registers. Note that since c may be the same as b we must update
+   the address and register descriptors. */ 
+
+{
+	int        r ;			 /* Register for counting */
+
+	for( r = R_GEN ; r < R_MAX ; r++ )   /* Already in a register */
+		if( rdesc[r].name == c )
+		{
+			spill_one( r ) ;
+			return r ;
+		}
+
+	for( r = R_GEN ; r < R_MAX ; r++ )
+		if( rdesc[r].name == NULL )  /* Empty register */
+		{
+			load_reg( r, c ) ;
+			return r ;
+		}
+
+	for( r = R_GEN ; r < R_MAX ; r++ )
+		if( !rdesc[r].modified )     /* Unmodifed register */
+		{
+			clear_desc( r ) ;
+			load_reg( r, c ) ;
+			return r ;
+		}
+
+	spill_one( R_GEN ) ;		     /* Modified register */
+	clear_desc( R_GEN ) ;
+	load_reg( R_GEN, c ) ;
+	return R_GEN ;
+
+}	/* int  get_rreg( SYMB *c ) */
+
+
+int  get_areg( SYMB *b,
+	       int   cr )		 /* Register already holding b */
+
+/* Get a register to hold the second argument of the computation
+
+      a := b op c
+
+   This must hold b and will not be overwritten. If b is already in a register
+   we use that, otherwise we chose in order of preference from 
+
+      An empty register
+      An unmodified register
+      A modified register
+
+   In the last case we spill the contents of the register before it is used. If
+   b is not in the given argument register we load it. We can use R0 for this
+   purpose, even if b is constant zero, but we avoid using the reserved
+   registers. We may not use cr unless it already contains b. */
+
+{
+	int        r ;			 /* Register for counting */
+
+	for( r = R_ZERO ; r < R_MAX ; r++ )
+		if( rdesc[r].name == b )              /* Already in register */
+			return r ;
+
+	for( r = R_GEN ; r < R_MAX ; r++ )
+		if( rdesc[r].name == NULL )           /* Empty register */
+		{
+			load_reg( r, b ) ;
+			return r ;
+		}
+
+	for( r = R_GEN ; r < R_MAX ; r++ )
+		if( !rdesc[r].modified && (r != cr))  /* Unmodifed register */
+		{
+			clear_desc( r ) ;
+			load_reg( r, b ) ;
+			return r ;
+		}
+
+	for( r = R_GEN ; r < R_MAX ; r++ )
+		if( r != cr )		 	       /* Modified register */
+		{
+			spill_one( r ) ;
+			clear_desc( r ) ;
+			load_reg( r, b ) ;
+			return r ;
+		}
+
+}	/* int  get_areg( SYMB *b,
+	  	          int   cr ) */
+//E*O*F cg.c//
+
+echo x - optimize.c
+mv optimize.c optimize.c.old
+cat > "optimize.c" << '//E*O*F optimize.c//'
+/******************************************************************************
+*******************************************************************************
+
+
+            OOO   PPPP   TTTTT  IIIII  M   M  IIIII  ZZZZZ  EEEEE
+           O   O  P   P    T      I    MM MM    I        Z  E
+           O   O  P   P    T      I    M M M    I       Z   E
+           O   O  PPPP     T      I    M M M    I      Z    EEEE
+           O   O  P        T      I    M   M    I     Z     E
+           O   O  P        T      I    M   M    I    Z      E
+            OOO   P        T    IIIII  M   M  IIIII  ZZZZZ  EEEEE
+
+
+*******************************************************************************
+*******************************************************************************
+
+                             An Optimizer for VSL
+                             ====================
+
+   This optimizer is a multi-pass optimizer, performing peephole, local and
+   global optimizations.  Designed only for use with SINGLE function programs.
+
+   Modifications:
+   ==============
+
+   May 15 91 JRJ:  First version (Jonathan R. Johnson, Carleton College)
+
+*******************************************************************************
+******************************************************************************/
+
+#include <stdio.h>
+#include "vc.h"
+
+#define MAX_BLOCKS 200              /* Limit on basic block count */
+#define SHOWALL    FALSE            /* Flag for showing all data-flow info */
+
+#define DI data.in                  /* For ease of use, abbreviations for */
+#define DK data.kill                /* data-flow information fields       */
+#define DG data.gen
+#define DO data.out
+#define GI global->in
+#define GG global->gen
+#define GK global->kill
+#define GO global->out
+
+#define B_STAT   0                  /* Block types for control-flow data */
+#define B_GOTO   1
+#define B_IF     2
+#define B_END    3
+
+typedef struct data {               /* Data-flow information record */
+  long gen, kill, in, out;
+} DATA;
+
+typedef struct slist {              /* Linked list statement structure: */
+  struct slist *prev, *next;        /*   Links to next, prev statments  */
+  TAC          *tac;                /*   Pointer to tac segment         */
+  DATA          data;               /*   Data-flow info record          */
+} SLIST;
+
+typedef struct bb {                 /* Graph structure for basic blocks:     */
+  unsigned char   next1, next2;     /*   Indices to one or both successors   */
+  unsigned char   prev1, prev2;     /*   Indices to one or both predecessors */
+  unsigned char   type;             /*   Flag for the block type             */
+  unsigned char   n;                /*   Multi-purpose: branch or flag...    */
+  SLIST          *sl;               /*   Pointer to statement list           */
+  unsigned char   defbase;          /*   First local def in def table        */
+  unsigned char   defptr;           /*   Index to next free def in table     */
+  unsigned char   change;           /*   Flag for data-flow analysis         */
+  DATA            data;             /*   Local data-flow analysis record     */
+} BB;
+
+int             LL;                 /* Bit count of long integer         */
+int             helpful;            /* Global flag for code improvement  */
+DATA           *global;             /* Global data-flow analysis record  */
+BB             *bbl[MAX_BLOCKS];    /* Basic block array                 */
+SLIST         **defs;               /* Pointer to definition table       */
+unsigned char   gdefptr;            /* Global index to free def in table */
+FILE           *outfile = NULL;     /* Output file for info              */
+
+/* Procedure prototypes */
+
+void           optimize(TAC *tls);
+void           init_op(TAC *tls);
+void           improve_function();
+void           join_blocks(unsigned char n, unsigned char *m, DATA *joined);
+void           improve_block(unsigned char n);
+void           local_copy_prop(unsigned char n);
+void           local_sub_expr_elim(unsigned char n);
+void           local_dead_code_elim(unsigned char n);
+void           data_flow_analyze(unsigned char n);
+
+void           global_copy_prop();
+void           global_sub_expr_elim();
+void           global_dead_code_elim();
+void           copy_prop_search(unsigned char n, TAC *t2, int i, int prhead);
+void           sub_expr_search(unsigned char n, TAC *t2, int i, int prhead);
+int            use_search(unsigned char n, SYMB *v, int i);
+
+void           unvisit_all();
+int            peephole(TAC *t);
+int            sort_cmtv(TAC *t);
+int            const_fold(TAC *t);
+unsigned char  find_dest(unsigned char label);
+long           kill_all(SYMB *s);
+void           fprint_instr(TAC *i);
+void           data_out(DATA d);
+
+
+void optimize(TAC *tls) {
+  
+  /*
+   *  This is the main function call, called by MAIN.C, which takes TAC as
+   *  its input, forms a basic block control-flow graph, and then runs
+   *  optimization routines on the graph.
+   *
+   *  The optimizer may be used in one of two ways:
+   *
+   *    $ vc -O <f.vsl >f.vas             # include optimization in the compile
+   *    $ vc -O trace <f.vsl >f.vas       # optimize and create a trace file
+   *
+   *  In the latter case, the file 'trace' will show the mechanism and method
+   *  of the optimizations.  In either case, comments attatched to 'f.vas' will
+   *  indicate that the optimization has been performed.
+   *
+   *  If data-flow information output is desired for every TAC statement, set
+   *  the constant SHOW_ALL to TRUE.  Reams of output _will_ result.
+   */
+  
+  int i;
+  
+  init_op(tls);                     /* Create basic block graph */
+  
+  helpful = TRUE;
+  
+  while (helpful) {
+    
+    for (i = 0; i < LL; i++)        /* Clear definitions */
+      defs[i] = NULL;
+    
+    helpful = FALSE;
+    improve_function();             /* Perform transformations on code */
+  }
+  
+  if (outfile)
+    fclose(outfile);
+}
+
+
+void init_op(TAC *tls) {
+  
+  /*
+   *  Optimizer initialization.  The tac statments are grouped into basic
+   *  blocks, and each block records information about its end condition
+   *  (e.g. goto, endfunc).  Statements are peephole-optimized as they are
+   *  inserted into the basic block data structure, and changes noted as made.
+   *  We also initialize data-flow analysis structures and records.
+   */
+  
+  unsigned char bbptr;              /* Basic block array index        */
+  char bbnow, bt, bl;               /* Block end flag, type and label */
+  int i;
+  TAC *t;
+  SLIST *s;
+  BB *b;
+  
+  LL = 8 * sizeof(long);            /* Set LL to the size of long in bits */
+  
+  bbnow = FALSE;                    /* Initialize block information data */
+  bbptr = bt = bl = 0;
+  
+  printf("\\        Optimizing...\n");
+  
+  if (*filename) {
+    printf("\\        Tracing optimization to %s.\n", filename);
+    outfile = fopen(filename, "w");
+  }
+  
+  /* The first statement always begins a basic block */
+  
+  b = bbl[bbptr++] = (BB *) safe_malloc(sizeof(BB));
+  s = b->sl = (SLIST *) safe_malloc(sizeof(SLIST));
+  s->tac = tls;
+  s->prev = NULL;
+  
+  if (outfile) {
+    fprintf(outfile, "-- Block 0\n");    
+    fprint_instr(tls);
+  }
+  
+  if (peephole(tls) && outfile) {
+    fprintf(outfile, "   =\n");
+    fprint_instr(tls);
+  }
+  
+  /* Run through the tac list, forming basic blocks with identifying info */
+  
+  for (t = tls->next; t; t = t->next) {
+    if ((t->op == TAC_LABEL) || (bbnow)) {
+      
+      /* Finish the current basic block and start a new one */
+      
+      bbnow     = FALSE;
+      b->type   = bt;
+      b->n      = bl;
+      s->next   = NULL;
+      b->change = TRUE;
+      b->defptr = 0;
+      b->prev1  = MAX_BLOCKS;
+      b->prev2  = MAX_BLOCKS;
+      if (outfile)
+        fprintf(outfile, "  (type=%d, lab=%d)\n-- Block %d\n", bt, bl, bbptr);
+      
+      bt = B_STAT;
+      bl = 0;
+      if (bbptr >= MAX_BLOCKS) {
+        error("Number of basic blocks too large.");
+        exit(0);
+      }
+      b = bbl[bbptr++] = (BB *) safe_malloc(sizeof(BB));
+      s = b->sl = (SLIST *) safe_malloc(sizeof(SLIST));
+      s->prev = NULL;
+    }
+    
+    else {                          /* continue with current block */
+      
+      /* Add a new statement structure onto the current block's list */
+      
+      s->next = (SLIST *) safe_malloc(sizeof(SLIST));
+      s->next->prev = s;
+      s = s->next;
+    }
+    
+    s->tac = t;                     /* Add tac statement to basic block */
+    
+    switch (t->op) {                /* Check for block end, store info */
+    case TAC_GOTO:
+      bbnow = TRUE;
+      bt    = B_GOTO;
+      bl    = t->LA->VA->VAL1;
+      break;
+    case TAC_IFZ:
+    case TAC_IFNZ:
+      bbnow = TRUE;
+      bt    = B_IF;
+      bl    = t->LA->VA->VAL1;
+      break;
+    case TAC_ENDFUNC:
+      bt = B_END;
+    }
+    
+    if (outfile)
+      fprint_instr(t);
+    if (peephole(t) && outfile) {
+      fprintf(outfile, "   =\n");
+      fprint_instr(t);
+    }
+  }
+  
+  b->type   = bt;                   /* Store info for last basic block */
+  b->n      = bl;
+  s->next   = NULL;
+  b->change = TRUE;
+  b->defptr = 0;
+  b->prev1  = MAX_BLOCKS;
+  b->prev2  = MAX_BLOCKS;
+  if (outfile)
+    fprintf(outfile, "  (type=%d, lab=%d)\n", bt, bl);
+  
+  /* Set flow-of-control pointers to the appropriate basic blocks */
+  
+  for (bbptr = 0; bbl[bbptr] && bbptr < MAX_BLOCKS; bbptr++) {
+    b = bbl[bbptr];
+    switch(b->type) {
+    case B_STAT:
+      b->next1 = bbptr + 1;
+      b->next2 = MAX_BLOCKS;
+      bbl[b->next1]->prev1 = bbptr;
+      break;
+    case B_GOTO:
+      b->next1 = find_dest(b->n);
+      b->next2 = MAX_BLOCKS;
+      bbl[b->next1]->prev2 = bbptr;
+      break;
+    case B_IF:
+      b->next1 = bbptr + 1;
+      bbl[b->next1]->prev1 = bbptr;
+      b->next2 = find_dest(b->n);
+      bbl[b->next2]->prev2 = bbptr;
+      break;
+    case B_END:
+      b->next1 = MAX_BLOCKS;        /* Signal endfunc with special value */
+      b->next2 = MAX_BLOCKS;
+    }
+  }
+  
+  /* Initialize data-flow analysis records */
+  
+  global = (DATA *) safe_malloc(sizeof(DATA));
+  
+  defs = (SLIST **) safe_malloc(LL * sizeof(SLIST *));
+}
+
+
+void improve_function() {
+  
+  /* 
+   *  Optimize the blocks locally in their control-flow structure, then
+   *  globally optimize.
+   */
+  
+  unsigned char  n, m;
+  BB            *b, *f = bbl[0];
+  
+  f->defbase = f->defptr = 0;
+  f->DI = 0;
+  
+  improve_block(0);                 /* Optimize first basic block */
+  GI = f->DI;
+  GG = f->DG;
+  GK = f->DK;
+  GO = f->DO;
+  gdefptr = f->defptr;
+  
+  n = 0;
+  m = f->next1;
+  
+  if (m < MAX_BLOCKS) {             /* If there is a second block, prepare */
+    b = bbl[m];                     /* for the join_blocks procedure       */
+    b->defbase = gdefptr;
+    b->DI      = GO;
+    improve_block(m);
+    gdefptr = b->defptr;
+  }
+  
+  while (m < MAX_BLOCKS)
+    join_blocks(n, &m, global);     /* Recursively optimize other blocks */
+  
+  if (outfile) {
+    fprintf(outfile, "\nGlobal data-flow information after local improv.\n");
+    data_out(*global);
+  }
+  
+  global_copy_prop();               /* Optimize function using global data */
+  global_sub_expr_elim();
+  global_dead_code_elim();
+}
+
+
+void join_blocks(unsigned char n, unsigned char *m, DATA *joined) {
+  
+  /* 
+   *  Join blocks together in accordance with data-flow analysis rules.  The
+   *  basic strategy is to take two optimized blocks, bbl[n] and bbl[*m] and
+   *  perform data-flow analysis calculations with the set of joined data and
+   *  with bbl[*m] or its "equivalent" block.  IF->THEN->ELSE and LOOP
+   *  structures are collapsed to such equivalent blocks so that they may be
+   *  joined with the other statements in step-wise fashion.
+   *
+   *  The function is called recursively to produce collapsed equivalent
+   *  blocks, and a global definition pointer, gdefptr, is used to direct the
+   *  appropriate placement of basic block definitions.  The variable n
+   *  represents the root of the control-flow structure being considered, while
+   *  m, a pointer to a basic block list index, is used to traverse the
+   *  descendants of n.
+   */
+  
+  unsigned char    t;
+  DATA            *d1, *d2;
+  BB              *b1 = bbl[n], *b2 = bbl[*m], *b3;
+  SLIST           *s;
+  
+  switch(b1->type) {
+    
+  case B_STAT:
+    
+    /* The root is a statement block */
+    
+    d1 = &(b2->data);               /* Assume that bbl[*m] is ready to join */
+    
+    switch(b2->type) {
+      
+    case B_STAT:
+      
+      /*
+       *  n's descendant is of type B_STAT; just prepare the following block
+       *  for joining and then go on to update the joined data-flow info.
+       */
+      
+      if (outfile)
+        fprintf(outfile, "\nSTAT->STAT\n");
+      
+      *m = b2->next1;               /* Get following block and improve it */
+      b3 = bbl[*m];
+      b3->defbase = gdefptr;
+      b3->DI     = b2->DO;
+      improve_block(*m);
+      gdefptr = b3->defptr;
+      
+      break;
+      
+    case B_IF:
+      
+      /*
+       *  n's descendant is the top of an IF structure; collapse it and then
+       *  go on, treating the resulting data-flow information as that of a
+       *  regular statement.
+       */
+      
+      if (outfile)
+        fprintf(outfile, "\nSTAT->IF\n");
+      
+      /*
+       *  Create a new set of data-flow information, setting it equal to the
+       *  data-flow info of n's current descendant.
+       */
+      
+      d1 = (DATA *) safe_malloc(sizeof(DATA));
+      d1->in   = b2->DI;
+      d1->gen  = b2->DG;
+      d1->kill = b2->DK;
+      d1->out  = b2->DO;
+      
+      t = *m;                       /* Prepare *m's descendant and recurse */
+      *m = b2->next1;
+      b3 = bbl[*m];
+      b3->defbase = gdefptr;
+      b3->DI      = b2->DO;
+      improve_block(*m);
+      gdefptr = b3->defptr;
+      join_blocks(t, m, d1);
+      
+      /* Now we are ready to join data-flow info with the equivalent block */
+      
+      if (outfile)
+        fprintf(outfile, "\nSTAT->STAT\n");
+      
+      break;
+      
+    case B_END:
+      
+      /* The current descendant of n is the last block, we are done. */
+         
+      if (outfile)
+        fprintf(outfile, "\nSTAT->END\n");
+      *m = b2->next1;
+    }
+    
+    /* Data-flow equations for joining statemement blocks */
+    
+    joined->gen  = d1->gen | joined->gen & ~d1->kill;
+    joined->kill = d1->kill | joined->kill & ~d1->gen;
+    joined->out  = d1->out;
+    
+    if (outfile) {
+      fprintf(outfile, "\nJoined data-flow information after STAT->xxx\n");
+      data_out(*joined);
+    }
+    
+    break;
+    
+  case B_IF:
+    
+    /* The root is an if block; non-goto descendants elicit a recursion */
+    
+    switch (b2->type) {
+      
+    case B_STAT:
+      
+      /* n's descendant is a statement block; we will recurse */
+      
+      if (outfile)
+        fprintf(outfile, "\nIF->STAT\n");
+      break;
+      
+    case B_GOTO:
+      
+      /* n's descendant is a goto block; either a LOOP or ELSE exists */
+      
+      if (outfile)
+        fprintf(outfile, "\nIF->GOTO\n");
+      d1 = &(b2->data);
+      break;
+      
+    case B_IF:
+      
+      /* n's descendant is an if block; we will recurse */
+      
+      if (outfile)
+        fprintf(outfile, "\nIF->IF\n");
+    }
+    
+    if (b2->type != B_GOTO) {
+      
+      /*
+       *  For all non-goto descendants, we recurse to make an equivalent goto
+       *  block starting with the descendant's data-flow info.
+       */
+      
+      d1 = (DATA *) safe_malloc(sizeof(DATA));
+      d1->in   = b2->DI;
+      d1->gen  = b2->DG;
+      d1->kill = b2->DK;
+      d1->out  = b2->DO;
+      
+      t = *m;                       /* Prepare the next block for recursion */
+      *m = b2->next1;
+      b3 = bbl[*m];
+      b3->defbase = gdefptr;
+      b3->DI      = b2->DO;
+      improve_block(*m);
+      gdefptr = b3->defptr;
+      
+      do                            /* Recurse until goto block is found */
+        join_blocks(t, m, d1);
+      while (bbl[*m]->type != B_GOTO);
+      
+      /* Goto block has been reached; include its data-flow info */
+      
+      b2 = bbl[*m];
+      d1->gen  = b2->DG | d1->gen & ~b2->DK;
+      d1->kill = b2->DK | d1->kill & ~b2->DG;
+      d1->out  = b2->DO;
+    }
+    
+    /*
+     *  Two possible outcomes here; either the goto is to the root block (a
+     *  loop structure is formed), or not (an else structure is formed).
+     */
+    
+    if (b2->next1 == n) {
+      
+      /*
+       *  A loop structure has been formed; double the data-flow info back to
+       *  the top of the loop and re-traverse the intervening blocks.
+       */
+      
+      if (outfile)
+        fprintf(outfile, "\nLOOP FORMED\n");
+      
+      b1->DI |= d1->out;            /* Include out[b2] in in[b1] */
+      improve_block(n);             /* Redo n's data-flow info */
+      
+      *m = b1->next1;               /* Restart m at n's left child */
+      b2 = bbl[*m];
+      b2->DI = b1->DO;              /* Update b2[in] */
+      improve_block(*m);            /* Redo *m's data-flow info */
+      
+      /* Again, a non-goto descendant recursion(s) to find goto block */
+      
+      if (b2->type != B_GOTO) {
+        
+        d1->in   = b2->DI;          /* Reset joined data for recursion */
+        d1->gen  = b2->DG;
+        d1->kill = b2->DK;
+        d1->out  = b2->DO;
+        
+        t = *m;                     /* Prepare the next block for recursion */
+        *m = b2->next1;
+        b3 = bbl[*m];
+        b3->DI = b2->DO;
+        improve_block(*m);
+        gdefptr = b3->defptr;
+        
+        do                          /* Recurse until goto block is found */
+          join_blocks(t, m, d1);
+        while (bbl[*m]->type != B_GOTO);
+        
+        /* Loop has been traversed; include goto block's data-flow info */
+        
+        b2 = bbl[*m];
+        d1->gen  = b2->DG | d1->gen & ~b2->DK;
+        d1->kill = b2->DK | d1->kill & ~b2->DG;
+        d1->out  = b2->DO;
+      }
+      
+      if (outfile) {
+        fprintf(outfile, "\nLoop branch data-flow information\n");
+        data_out(*d1);
+      }
+      
+      *m = b1->next2;               /* Prepare n's right child */
+      b3 = bbl[*m];
+      b3->defbase = gdefptr;
+      b3->DI      = d1->out;
+      improve_block(*m);
+      gdefptr = b3->defptr;
+    }
+    
+    else {
+      
+      /*
+       *  An else structure has been formed; traverse n's right branch to
+       *  produce data-flow info for the then structure, and do the appropriate
+       *  data-flow calculations.
+       */
+      
+      if (outfile)
+        fprintf(outfile, "\nELSE BODY COMPLETED\n");
+      
+      t  = b1->next2;               /* Prepare n's right child for recursion */
+      b3 = bbl[t];
+      b3->defbase = gdefptr;
+      b3->DI      = b1->DO;
+      improve_block(t);
+      gdefptr = b3->defptr;
+      
+      /* Use right child's data-flow info as joined data in the recursion */
+      
+      d2 = (DATA *) safe_malloc(sizeof(DATA));
+      d2->in   = b3->DI;
+      d2->gen  = b3->DG;
+      d2->kill = b3->DK;
+      d2->out  = b3->DO;
+      
+      *m = b3->next1;               /* Begin traversal with left child */
+      
+      /*
+       *  Prepare a descendant and recurse until we find the block that joins
+       *  the else and then stuctures.
+       */
+      
+      while (*m != b2->next1) {
+        b3 = bbl[*m];
+        b3->defbase = gdefptr;
+        b3->DI      = d2->out;
+        improve_block(*m);
+        gdefptr = b3->defptr;
+        join_blocks(t, m, d2);
+      }
+      
+      if (outfile)
+        fprintf(outfile, "\nTHEN BODY COMPLETED\n");
+      
+      /* Data-flow equations for then and else structures */
+      
+      d1->gen  |= d2->gen;
+      d1->kill &= d2->kill;
+      d1->out  |= d2->out;
+      
+      /* d1 is now an equivalent statement */
+      
+      if (outfile) {
+        fprintf(outfile, "\nIf-else data-flow information\n");
+        data_out(*d1);
+      }
+      
+      *m = b3->next1;               /* Prepare the joint descendant */
+      b3 = bbl[*m];
+      b3->defbase = gdefptr;
+      b3->DI      = d1->out;
+      improve_block(*m);
+      gdefptr = b3->defptr;
+    }
+    
+    /*
+     *  We now have an equivalent statement block in d1; do the appropriate
+     *  data-flow analysis calculations.
+     */
+    
+    joined->gen  = d1->gen | joined->gen & ~d1->kill;
+    joined->kill = d1->kill | joined->kill & ~d1->gen;
+    joined->out  = d1->out;
+    
+    if (outfile) {
+      fprintf(outfile, "\nJoined data-flow information after IF->xxx\n");
+      data_out(*joined);
+    }
+  }
+}
+
+
+void improve_block(unsigned char n) {
+  
+  /*
+   *  Do local optimization on this block; if no changes have occured, just
+   *  recalculate the block's data-flow information.
+   */
+  
+  BB *b = bbl[n];
+  
+  if (!b->change)
+    data_flow_analyze(n);
+  else {
+    while(b->change) {
+      data_flow_analyze(n);
+      local_copy_prop(n);
+      local_sub_expr_elim(n);
+      local_dead_code_elim(n);
+    }
+  }
+}
+
+
+void local_copy_prop(unsigned char n) {
+  
+  /*
+   *  Eliminate copy propagations in the basic block.  With each local
+   *  definition that performs a copy, "propagate" the copy down through the
+   *  statement list until the list ends or until either variable in the copy
+   *  is changed.
+   */
+  
+  int i, prhead;                    /* prhead keeps us from reprinting stuff */
+  BB *b = bbl[n];
+  SLIST *s;
+  TAC *t1, *t2;
+  
+  if (outfile)
+    fprintf(outfile, "\n** Local copy propagation scan **\n");
+  
+  for (i = b->defbase; i < b->defptr; i++) {
+    s = defs[i];
+    if (s->tac->op == TAC_COPY) {
+      prhead = TRUE;
+      t2 = s->tac;
+      
+      /* A copy has been found; run through remaining statements */
+      
+      for (s = s->next; s; s = s->next) {
+        t1 = s->tac;
+        
+        /*
+         *  Break if either copy statement variable is changed;  ARG and
+         *  RETURN do not change their argument -- we are assuming single
+         *  functions, and thus the only calls will be to the non-destructive
+         *  PRINT routines in the library.  It is likeley that RETURN will not
+         *  be used in a single function, but we leave it in for convenience.
+         *  Also, a variable is unchanged if set equal to itself.
+         */
+        
+        if ((t1->VA == t2->VA || t1->VA == t2->VB) &&
+            !(t1->op == TAC_ARG || t1->op == TAC_RETURN) &&
+            !(t1->op == TAC_COPY && t1->VA == t1->VB))
+          break;
+            
+        if (t1->VA == t2->VA && (t1->op == TAC_ARG || t1->op == TAC_RETURN) ||
+            t1->VB == t2->VA || t1->VC == t2->VA) {
+          
+          /* Propagate the copy */
+          
+          if (outfile) {
+            if (prhead) {
+              fprintf(outfile, "\nEliminating copy propagation:");
+              fprint_instr(t2);
+              prhead = FALSE;
+            }
+            fprintf(outfile, "\n");
+            fprint_instr(t1);
+            fprintf(outfile, "     v\n");
+          }
+          
+          if (t1->VA == t2->VA && (t1->op == TAC_ARG || t1->op == TAC_RETURN))
+            t1->VA = t2->VB;
+          if (t1->VB == t2->VA)
+            t1->VB = t2->VB;
+          if (t1->VC == t2->VA)
+            t1->VC = t2->VB;
+          b->change = TRUE;
+          if (outfile)
+            fprint_instr(t1);
+          if (peephole(t1) && outfile) {
+            fprintf(outfile, "   =\n");
+            fprint_instr(t1);
+          }
+        }
+      }
+    }
+  }
+}
+
+
+void local_sub_expr_elim(unsigned char n) {
+  
+  /*
+   *  Eliminate common subexpressions in the basic block.  With each local
+   *  definition that calculates a sub-expression, eliminate all subsequent
+   *  similar calculations in the statement list until the list ends or until
+   *  any variable in the expression statement is changed.
+   */
+  
+  int i, prhead;
+  BB *b = bbl[n];
+  SLIST *s;
+  TAC *t1, *t2;
+  
+  if (outfile)
+    fprintf(outfile, "\n** Local common sub-expression scan **\n");
+  
+  for (i = b->defbase; i < b->defptr; i++) {
+    s = defs[i];
+    if (s->tac->op >= TAC_ADD && s->tac->op <= TAC_NEG) {
+      prhead = TRUE;
+      t2 = s->tac;
+      
+      /* A sub-expression has been found; run through remaining statments */
+      
+      for (s = s->next; s; s = s->next) {
+        t1 = s->tac;
+        
+        /* Break if any expression statement variable is changed */
+        
+        if (t1->VA == t2->VA || t1->VA == t2->VB || t1->VA == t2->VC)
+          break;
+        
+        if (t1->op == t2->op && t1->VB == t2->VB && t1->VC == t2->VC) {
+          
+          /* Eliminate common sub-expression */
+          
+          if (outfile) {
+            if (prhead) {
+              fprintf(outfile, "\nEliminating common sub-expression:");
+              fprint_instr(t2);
+              prhead = FALSE;
+            }
+            fprintf(outfile, "\n");
+            fprint_instr(t1);
+            fprintf(outfile, "     v\n");
+          }
+          
+          t1->op = TAC_COPY;
+          t1->VB = t2->VA;
+          t1->VC = NULL;
+          b->change = TRUE;
+          if (outfile)
+            fprint_instr(t1);
+          if (peephole(t1) && outfile) {
+            fprintf(outfile, " =\n");
+            fprint_instr(t1);
+          }
+        }
+      }
+    }
+  }
+}
+
+
+void local_dead_code_elim(unsigned char n) {
+  
+  /*
+   *  Eliminate dead code in the basic block.  With each local definition,
+   *  check subsequent statements for any use of the definition's result.  If
+   *  no use is found and the definition's result is a temporary variable, then
+   *  that definition is dead.  If the definition's result is not a temporary,
+   *  the definition is still dead if, being unused, it does not reach the end
+   *  of the block.
+   */
+  
+  char   name;                      /* Char to hold first letter of a var */
+  int    i, used;
+  BB    *b = bbl[n];
+  SYMB  *v;
+  SLIST *s;
+  
+  if (outfile)
+    fprintf(outfile, "\n** Local dead code scan **\n");
+  
+  for (i = b->defbase; i < b->defptr; i++) {
+    v = defs[i]->tac->VA;
+    used = FALSE;
+    s = defs[i]->next;
+    
+    /*
+     *  Search for uses of the definition result; quit if definition is not
+     *  "live" at the start of a statement.
+     */
+    
+    for (; s && !used && (s->DI & 1 << i); s = s->next)
+      if (s->tac->VB == v || s->tac->VC == v ||
+          s->tac->VA == v && (s->tac->op == 10 || s->tac->op == 12))
+        used = TRUE;
+    
+    name = *(defs[i]->tac->VA->TEXT1);
+    
+    /* If a non-temporary reaches the end of the statement list, save it. */
+    
+    if (!used && !s && name != 'T')
+      used = TRUE;
+    
+    if (!used) {
+      s = defs[i];
+      
+      /* Eliminate dead code */
+      
+      if (s->prev && name == 'T' && s->prev->tac->op == TAC_VAR) {
+        
+        /* Eliminate var Tn statement along with its definition */
+        
+        if (outfile) {
+          fprintf(outfile, "\nEliminating");
+          fprint_instr(s->prev->tac);
+          fprintf(outfile, "Eliminating");
+          fprint_instr(s->tac);
+        }
+        
+        /* Renovate the statement list */
+        
+        if (s->prev->prev)
+          s->prev->prev->next = s->next;
+        else
+          b->sl = s->next;
+        if (s->next)
+          s->next->prev = s->prev->prev;
+        
+        /* Renovate the TAC list */
+        
+        s->tac->prev->prev->next = s->tac->next;
+        s->tac->next->prev = s->tac->prev->prev;
+        
+        free(s->prev->tac);         /* Abandon lost statments :( */
+        free(s->prev);
+        free(s->tac);
+        free(s);
+      }
+      else {
+        
+        /* No associated var statement, so eliminate one statement only */
+        
+        if (outfile) {
+          fprintf(outfile, "\nEliminating");
+          fprint_instr(s->tac);
+        }
+        
+        if (s->prev)                /* Renovate the statment list */
+          s->prev->next = s->next;
+        else
+          b->sl = s->next;
+        if (s->next)
+          s->next->prev = s->prev;
+        
+        /* Renovate the TAC list */
+        
+        s->tac->prev->next = s->tac->next;
+        s->tac->next->prev = s->tac->prev;
+        
+        free((void *) s->tac);      /* Abandon lost statement :( */
+        free((void *) s);
+      }
+      b->change = TRUE;
+    }
+  }
+}
+
+
+void data_flow_analyze(unsigned char n) {
+  
+  /* Make definition table and calculate data flow analysis results */
+  
+  int    i;
+  BB    *b = bbl[n];
+  SLIST *s;
+  TAC   *t;
+  
+  b->change = FALSE;
+  
+  if (outfile)
+    fprintf(outfile, "\nDefinitions for block %d :\n", n);
+  
+  /* Unset old definitions */
+  
+  for (i = b->defbase; i < b->defptr; i++)
+    defs[i] = NULL;
+  
+  b->defptr = b->defbase;           /* Reset definition table index */
+  
+  /* Insert definitions into the definition table, setting gen[s] en route */
+  
+  for (s = b->sl; s; s = s->next) {
+    if (s->tac->op >= TAC_ADD && s->tac->op <= TAC_COPY) {
+      if (b->defptr < LL) {
+        s->DG = 1 << b->defptr;
+        defs[b->defptr++] = s;
+        if (outfile) {
+          fprintf(outfile, "d%02d = ", b->defptr - 1);
+          fprint_instr(s->tac);
+        }
+      }
+      else
+        s->DG = 0;
+    }
+  }
+  
+  if (outfile)
+    fprintf(outfile, "\n");
+  
+  /* If defcount exceeds the long int binary capacity, signal an error */
+  
+  if (b->defptr >= LL && outfile)
+    fprintf(outfile, "\n%d out of %d definitions were dropped.\n",
+            b->defptr - LL, b->defptr - b->defbase);
+  
+  /* Generate in, gen, kill, and out for the statements and the block */
+  
+  b->DG = b->DK = 0;                /* gen[b] and kill[b] start at nil */
+  
+  b->sl->DI = b->DI;                /* Set in[s] for first statement */
+  
+  for (s = b->sl; s; s = s->next) {
+    
+    t = s->tac;
+    
+    /* If a := expr is defined, kill all other definitions of a */
+    
+    if (t->op >= TAC_ADD && t->op <= TAC_COPY || t->op == TAC_CALL && t->VA)
+      s->DK = kill_all(t->VA) & ~s->DG;
+    else
+      s->DK = 0;
+    
+    /* Calculate out[s] */
+    
+    s->DO = s->DG | (s->DI & ~s->DK);
+    
+    /* Update gen[b] and kill[b] */
+    
+    b->DG = s->DG | (b->DG & ~s->DK);
+    b->DK = s->DK | (b->DK & ~s->DG);
+    
+    if (s->next)
+      s->next->DI = s->DO;          /* Pass off s[out] appropriately */
+    else
+      b->DO = s->DO;
+    
+    /* Output statement's data-flow information if appropriate */
+    
+    if (SHOWALL && outfile && b->defptr - b->defbase)
+      switch (s->tac->op) {
+      case TAC_UNDEF:
+      case TAC_GOTO:
+      case TAC_LABEL:
+      case TAC_VAR:
+      case TAC_BEGINFUNC:
+      case TAC_ENDFUNC:
+        break;
+      default:
+        fprint_instr(t);
+        data_out(s->data);
+        fprintf(outfile, "\n");
+      }
+  }
+  
+  if (outfile) {
+    fprintf(outfile, "Block %d :\n", n);
+    data_out(b->data);
+  }
+}
+
+
+/*
+ *  Global optimization routines.  Each operates by calling a recursive search
+ *  procedure that will do the rest of the work.  In the first call, searches
+ *  in out-of-range blocks will be produced, but this is for the sake of basic
+ *  readability.  The alternative is putting two switch statements in every
+ *  main routine.  If a bad call is performed, the search routine will return
+ *  appropriately.
+ */
+
+
+void global_copy_prop() {
+  
+  /*
+   *  Perform global copy propagation on the code.  For each copy definition,
+   *  call the search routine on both children of its block.  All local copy
+   *  propagations have already been done.  Don't bother with the last block.
+   */
+  
+  int i, n;                         /* n is the basic block list index */
+  BB *b;
+  TAC *t;
+  
+  if (outfile)
+    fprintf(outfile, "\n** Global copy propagation scan **\n");
+  
+  n = 0;
+  for (b = bbl[n]; b->next1 != MAX_BLOCKS; b = bbl[++n]) {
+    for (i = b->defbase; i < b->defptr; i++) {
+      if (defs[i]->tac->op == TAC_COPY) {
+        t = defs[i]->tac;
+        unvisit_all();
+        copy_prop_search(b->next1, t, i, TRUE);
+        unvisit_all();
+        copy_prop_search(b->next2, t, i, TRUE);
+      }
+    }
+  }
+}
+
+
+void global_sub_expr_elim() {
+  
+  /*
+   *  Perform global common sub-expression elimination on the code.  For each
+   *  sub-expression definition, call the search routine on both children of
+   *  its block.  All local sub-expression eliminations have already been done.
+   *  Again, don't bother with the last block.
+   */
+  
+  int i, n;                         /* n is the basic block list index */
+  BB *b;
+  TAC *t;
+  
+  if (outfile)
+    fprintf(outfile, "\n** Global common sub-expression scan **\n");
+  
+  n = 0;
+  for (b = bbl[n]; b->next1 != MAX_BLOCKS; b = bbl[++n]) {
+    for (i = b->defbase; i < b->defptr; i++) {
+      t = defs[i]->tac;
+      if (t->op >= TAC_ADD && t->op <= TAC_NEG) {
+        unvisit_all();
+        sub_expr_search(b->next1, t, i, TRUE);
+        unvisit_all();
+        sub_expr_search(b->next2, t, i, TRUE);
+      }
+    }
+  }
+}
+
+
+void global_dead_code_elim() {
+  
+  /*
+   *  Perform global dead code elimination on the code.  For each definition,
+   *  search for a use in its block and, if not locally used, call the search
+   *  routine on both children of its block.  Note that when we reach the last
+   *  block we will still search for uses, unlike the means of searching in the
+   *  previous two functions.  We also do not care about the identity of a var;
+   *  whether it is a temporary or a user-defined variable, its definition will
+   *  be eliminated here if it goes unused.
+   */
+  
+  int i, n, used;                   /* n is the basic block list index */
+  BB *b;
+  SLIST *s;
+  SYMB *v;
+  
+  if (outfile)
+    fprintf(outfile, "\n** Global dead code scan **\n");
+  
+  n = 0;
+  do {
+    b = bbl[n++];
+    for (i = b->defbase; i < b->defptr; i++) {
+      v = defs[i]->tac->VA;
+      
+      /* Check for local use */
+      
+      used = FALSE;
+      s = defs[i]->next;
+      for (; s && !used && (s->DI & 1 << i); s = s->next)
+        if (s->tac->VB == v || s->tac->VC == v ||
+            s->tac->VA == v && (s->tac->op == 10 || s->tac->op == 12))
+          used = TRUE;
+      
+      /* If not used here, search on.  Otherwise, don't bother going further */
+      
+      if (!used) {
+        unvisit_all();
+        used = use_search(b->next1, defs[i]->tac->VA, i);
+        unvisit_all();
+        used |= use_search(b->next2, defs[i]->tac->VA, i);
+      }
+      
+      if (!used) {
+        s = defs[i];
+        
+        /* Eliminate dead code */
+        
+        if (*(s->tac->VA->TEXT1) == 'T' && s->prev->tac->op == TAC_VAR) {
+          
+          /* Eliminate var Tn statement along with its definition */
+          
+          if (outfile) {
+            fprintf(outfile, "\nEliminating");
+            fprint_instr(s->prev->tac);
+            fprintf(outfile, "Eliminating");
+            fprint_instr(s->tac);
+          }
+          
+          /* Renovate the statment list */
+          
+          if (s->prev->prev)
+            s->prev->prev->next = s->next;
+          else
+            b->sl = s->next;
+          if (s->next)
+            s->next->prev = s->prev->prev;
+          
+          /* Renovate the TAC list */
+          
+          s->tac->prev->prev->next = s->tac->next;
+          s->tac->next->prev = s->tac->prev->prev;
+          
+          free(s->prev->tac);       /* Abandon lost statements :( */
+          free(s->prev);
+          free(s->tac);
+          free(s);
+        }
+        else {
+          
+          /* No associated var statement, so eliminate one statement only */
+          
+          if (outfile) {
+            fprintf(outfile, "\nEliminating");
+            fprint_instr(s->tac);
+          }
+          
+          if (s->prev)              /* Renovate the statement list */
+            s->prev->next = s->next;
+          else
+            b->sl = s->next;
+          if (s->next)
+            s->next->prev = s->prev;
+          
+          /* Renovate the TAC list */
+          
+          s->tac->prev->next = s->tac->next;
+          s->tac->next->prev = s->tac->prev;
+          
+          free((void *) s->tac);    /* Abandon lost statement :( */
+          free((void *) s);
+        }
+        helpful = b->change = TRUE;
+      }
+    }
+  }
+  while (b->next1 != MAX_BLOCKS);
+}
+
+
+void copy_prop_search(unsigned char n, TAC *t2, int i, int prhead) {
+  
+  /*
+   *  Search recursively for the copy variable in t2, propagating when found.
+   *  When done with this block, call the next blocks as appropriate.
+   */
+  
+  BB *b;
+  TAC *t1;
+  SLIST *s;
+  
+  /*
+   *  If the basic block list index is out of range or if this block has
+   *  already been visited, then exit.
+   */
+  
+  if (n < MAX_BLOCKS && !bbl[n]->n) {
+    b = bbl[n];
+    b->n = TRUE;                    /* Mark block as visited */
+    
+    /* If definition i may not reach this block, don't do any propagations */
+    
+    if (b->prev1 < MAX_BLOCKS && !(bbl[b->prev1]->DO & 1 << i) ||
+        b->prev2 < MAX_BLOCKS && !(bbl[b->prev2]->DO & 1 << i))
+      return;
+    
+    /* Search for the copy variable in block statments */
+    
+    for (s = b->sl; s; s = s->next) {
+      t1 = s->tac;
+      
+      /*
+       *  Break if either copy statement variable is changed;  ARG and
+       *  RETURN do not change their argument -- we are assuming single
+       *  functions, and thus the only calls will be to the non-destructive
+       *  PRINT routines in the library.  It is likeley that RETURN will not
+       *  be used in a single function, but we leave it in for convenience.
+       */
+      
+      if ((t1->VA == t2->VA || t1->VA == t2->VB) &&
+          !(t1->op == TAC_ARG || t1->op == TAC_RETURN) &&
+          !(t1->op == TAC_COPY && t1->VA == t1->VB))
+        return;
+      
+      if (t1->VA == t2->VA && (t1->op == TAC_ARG || t1->op == TAC_RETURN) ||
+          t1->VB == t2->VA || t1->VC == t2->VA) {
+        
+        /* Propagate the copy */
+        
+        if (outfile) {
+          if (prhead) {
+            fprintf(outfile, "\nEliminating copy propagation:");
+            fprint_instr(t2);
+            prhead = FALSE;
+          }
+          fprintf(outfile, "\n");
+          fprint_instr(t1);
+          fprintf(outfile, "     v\n");
+        }
+        
+        if (t1->VA == t2->VA && (t1->op == TAC_ARG || t1->op == TAC_RETURN))
+          t1->VA = t2->VB;
+        if (t1->VB == t2->VA)
+          t1->VB = t2->VB;
+        if (t1->VC == t2->VA)
+          t1->VC = t2->VB;
+        helpful = b->change = TRUE;
+        if (outfile)
+          fprint_instr(t1);
+        if (peephole(t1) && outfile) {
+          fprintf(outfile, "   =\n");
+          fprint_instr(t1);
+        }
+      }
+    }
+    
+    switch (b->type) {
+    case B_END:
+      break;
+    case B_IF:
+      copy_prop_search(b->next2, t2, i, prhead);
+    default:
+      copy_prop_search(b->next1, t2, i, prhead);
+    }
+  }
+}
+
+
+void sub_expr_search(unsigned char n, TAC *t2, int i, int prhead) {
+  
+  /*
+   *  Search recursively for the common sub-expression in t2, eliminating when
+   *  found.  When done with this block, call the next blocks as appropriate.
+   */
+  
+  BB *b;
+  TAC *t1;
+  SLIST *s;
+    
+  /*
+   *  If the basic block list index is out of range or if this block has
+   *  already been visited, then exit.
+   */
+  
+  if (n < MAX_BLOCKS && !bbl[n]->n) {
+    b = bbl[n];
+    b->n = TRUE;                    /* Mark block as visited */
+    
+    /* If definition i may not reach this block, don't eliminate sub-exps */
+    
+    if (b->prev1 < MAX_BLOCKS && !(bbl[b->prev1]->DO & 1 << i) ||
+        b->prev2 < MAX_BLOCKS && !(bbl[b->prev2]->DO & 1 << i))
+      return;
+    
+    /* Search for the sub-expression in block statements */
+    
+    for (s = b->sl; s; s = s->next) {
+      t1 = s->tac;
+      
+      /* Return if any expression statement variable is changed */
+      
+      if (t1->VA == t2->VA || t1->VA == t2->VB || t1->VA == t2->VC)
+        return;
+      
+      if (t1->op == t2->op && t1->VB == t2->VB && t1->VC == t2->VC) {
+        
+        /* Eliminate common sub-expression */
+        
+        if (outfile) {
+          if (prhead) {
+            fprintf(outfile, "\nEliminating common sub-expression:");
+            fprint_instr(t2);
+            prhead = FALSE;
+          }
+          fprintf(outfile, "\n");
+          fprint_instr(t1);
+          fprintf(outfile, "     v\n");
+        }
+        
+        t1->op = TAC_COPY;
+        t1->VB = t2->VA;
+        t1->VC = NULL;
+        helpful = b->change = TRUE;
+        if (outfile)
+          fprint_instr(t1);
+        if (peephole(t1) && outfile) {
+          fprintf(outfile, " =\n");
+          fprint_instr(t1);
+        }
+      }
+    }
+    
+    switch (b->type) {
+    case B_END:
+      break;
+    case B_IF:
+      sub_expr_search(b->next2, t2, i, prhead);
+    default:
+      sub_expr_search(b->next1, t2, i, prhead);
+    }
+  }
+}
+
+
+int use_search(unsigned char n, SYMB *v, int i) {
+  
+  /* Search recursively for any uses of definition; return TRUE if used */
+  
+  BB *b;
+  SLIST *s;
+    
+  /*
+   *  If the basic block list index is out of range or if this block has
+   *  already been visited, then exit.
+   */
+  
+  if (n < MAX_BLOCKS && !bbl[n]->n) {
+    b = bbl[n];
+    b->n = TRUE;                    /* Mark block as visited */
+    
+    /*
+     *  Search for uses of the definition result; quit if definition is not
+     *  "live" at the start of a statement.
+     */
+    
+    for (s = b->sl; s; s = s->next) {
+      
+      if (!(s->DI & 1 << i))        /* Definition has been killed; exit */
+        return FALSE;
+      
+      if (s->tac->VB == v || s->tac->VC == v ||
+          s->tac->VA == v && (s->tac->op == 10 || s->tac->op == 12))
+        return TRUE;
+    }
+    
+    /* If we reach here, it's not been used or killed -- search on */
+    
+    switch (b->type) {
+    case B_END:
+      return FALSE;
+    case B_IF:
+      return (use_search(b->next1, v, i) | use_search(b->next2, v, i));
+    default:
+      return use_search(b->next1, v, i);
+    }
+  }
+  else
+    return FALSE;
+}
+
+
+void unvisit_all() {
+  
+  /* Mark all blocks as unvisited */
+  
+  int p;
+  
+  p = 0;
+  do
+    bbl[p]->n = FALSE;
+  while (bbl[p++]->next1 != MAX_BLOCKS);
+}
+
+
+int peephole(TAC *t) {
+  
+  /* Perform peephole optimizations.  Most are mathematical identities */
+  
+  int didit = FALSE;                /* Boolean to remember sort success */
+  
+  didit = sort_cmtv(t);
+  
+  if (const_fold(t))
+    return TRUE;
+  
+  switch (t->op) {
+    
+  case TAC_ADD:
+    
+    if ((t->VC->type == T_INT) && (t->VC->VAL1 == 0)) {     /* a + 0 = a */
+      t->op = TAC_COPY;
+      return TRUE;
+    }
+    
+    break;
+    
+  case TAC_SUB:
+    
+    if ((t->VB->type == T_INT) && (t->VB->VAL1 == 0)) {     /* 0 - a = -a */
+      t->VB = t->VC;
+      t->VC = NULL;
+      t->op = TAC_NEG;
+      return TRUE;
+    }
+    
+    if ((t->VC->type == T_INT) && (t->VC->VAL1 == 0)) {     /* a - 0 = a */
+      t->op = TAC_COPY;
+      return TRUE;
+    }
+    
+    break;
+    
+  case TAC_MUL:
+    
+    if (t->VC->type == T_INT) {
+      if (t->VC->VAL1 == 0) {                               /* a * 0 = 0 */
+        t->VB = t->VC;
+        t->VC = NULL;
+        t->op = TAC_COPY;
+        return TRUE;
+      }
+      if (t->VC->VAL1 == 1) {                               /* a * 1 = a */
+        t->op = TAC_COPY;
+        return TRUE;
+      }
+      if (t->VC->VAL1 == 2) {                               /* a * 2 = a + a */
+        t->VC = t->VB;
+        t->op = TAC_ADD;
+        return TRUE;
+      }
+    }
+    
+    break;
+    
+  case TAC_DIV:
+    
+    if ((t->VB->type == T_INT) && (t->VB->VAL1 == 0)) {     /* 0 / a = 0 */
+      t->op = TAC_COPY;
+      t->VC = NULL;
+      return TRUE;
+    }
+    
+    if ((t->VC->type == T_INT) && (t->VC->VAL1 == 1)) {     /* a / 1 = a */
+      t->op = TAC_COPY;
+      t->VC = NULL;
+      return TRUE;
+    }
+  }
+  
+  return didit;                     /* Return false if nothing was done */
+}
+
+
+int sort_cmtv(TAC *t) {
+  
+  /*
+   *  If a statement is a commutative binary operation, make sure the arguments
+   *  are alphabetized or ordered with variables first, constants second.
+   */
+  
+  SYMB *s;                          /* Swapping symbol */
+  
+  if ((t->op == TAC_ADD) || (t->op == TAC_MUL)) {
+    if ((t->VB->type == T_VAR) && (t->VC->type == T_VAR)) {
+      if (strcmp(t->VB->TEXT1, t->VC->TEXT1) > 0) {
+        s = t->VB;
+        t->VB = t->VC;
+        t->VC = s;
+        return TRUE;
+      }
+    }
+    else if (t->VB->type == T_INT && t->VC->type == T_VAR) {
+      s = t->VB;
+      t->VB = t->VC;
+      t->VC = s;
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+
+int const_fold(TAC *t) {
+  
+  /* Perform constant folding if appropriate */
+  
+  int newc;                         /* Holds the new constant value */
+  
+  if ((t->op >= TAC_ADD && t->op <= TAC_DIV &&
+       t->VB->type == T_INT && t->VC->type == T_INT) ||
+      (t->op == TAC_NEG && t->VB->type == T_INT)) {
+    
+    switch (t->op) {
+    case TAC_ADD:
+      newc = t->VB->VAL1 + t->VC->VAL1;
+      break;
+    case TAC_SUB:
+      newc = t->VB->VAL1 - t->VC->VAL1;
+      break;
+    case TAC_MUL:
+      newc = t->VB->VAL1 * t->VC->VAL1;
+      break;
+    case TAC_DIV:
+      if (t->VC->VAL1 == 0) {
+        
+        /*
+         *  In case of division by zero, it is the user's fault.  Signal the
+         *  error and set the new constant = 2^32 - 1 -- near infinity.
+         */
+        
+        error("Division by zero encountered during optimization");
+        newc = ~0;
+      }
+      else
+        newc = t->VB->VAL1 / t->VC->VAL1;
+      break;
+    case TAC_NEG:
+      newc = -t->VB->VAL1;
+    }
+    
+    t->op = TAC_COPY;
+    t->VB = mkconst(newc);
+    t->VC = NULL;
+    return TRUE;
+  }
+  
+  else
+    return FALSE;
+}
+
+
+unsigned char find_dest(unsigned char label) {
+  
+  /* Find the block that begins with the indicated label */
+  
+  unsigned char   dest;
+  TAC            *t;
+  
+  for (dest = 0; dest < MAX_BLOCKS; dest++) {
+    t = bbl[dest]->sl->tac;
+    if (t->op == TAC_LABEL && t->VA->VAL1 == label)
+      return dest;
+  }
+}
+
+
+long kill_all(SYMB *s) {
+  
+  /* Find all defs that define s; return a vector that flags these defs */
+  
+  int d;
+  long v = 0;
+  
+  for (d = 0; d < LL; d++) {
+    if (defs[d] && defs[d]->tac->VA == s)
+      v |= 1 << d;
+  }
+  
+  return v;
+}
+
+
+void fprint_instr(TAC *i) {
+  
+  /* Print a tac instruction to the trace file.  Adapted from main.c, JPB */
+  
+  char sa[12];
+  char sb[12];
+  char sc[12];
+  
+  fprintf(outfile, "  ");
+  
+  switch(i->op) {
+    case TAC_UNDEF:
+      fprintf(outfile, "undef\n");
+      break;
+    case TAC_ADD:
+      fprintf(outfile, "%s := %s + %s\n", ts(i->VA, sa), ts(i->VB, sb),
+              ts(i->VC, sc));
+      break;
+    case TAC_SUB:
+      fprintf(outfile, "%s := %s - %s\n", ts(i->VA, sa), ts(i->VB, sb),
+              ts(i->VC, sc));
+      break;
+    case TAC_MUL:
+      fprintf(outfile, "%s := %s * %s\n", ts(i->VA, sa), ts(i->VB, sb),
+              ts(i->VC, sc));
+      break;
+    case TAC_DIV:
+      fprintf(outfile, "%s := %s / %s\n", ts(i->VA, sa), ts(i->VB, sb),
+              ts(i->VC, sc));
+      break;
+    case TAC_NEG:
+      fprintf(outfile, "%s := - %s\n", ts(i->VA, sa), ts(i->VB, sb));
+      break;
+    case TAC_COPY:
+      fprintf(outfile, "%s := %s\n", ts(i->VA, sa), ts(i->VB, sb));
+      break;
+    case TAC_GOTO:
+      fprintf(outfile, "goto L%d\n", i->LA->VA->VAL1);
+      break;
+    case TAC_IFZ:
+      fprintf(outfile, "ifz %s goto L%d\n", ts(i->VB, sb), i->LA->VA->VAL1);
+      break;
+    case TAC_IFNZ:
+      fprintf(outfile, "ifnz %s goto L%d\n", ts(i->VB, sb), i->LA->VA->VAL1);
+      break;
+    case TAC_ARG:
+      fprintf(outfile, "arg %s\n", ts(i->VA, sa));
+      break;
+    case TAC_CALL:
+      if(i->VA == NULL)
+        fprintf(outfile, "call L%d\n", i->LB->VA->VAL1);
+      else
+        fprintf(outfile, "%s = call L%d\n", ts(i->VA, sa), i->LB->VA->VAL1);
+      break;
+    case TAC_RETURN:
+      fprintf(outfile, "return %s\n", ts(i->VA, sa));
+      break;
+    case TAC_LABEL:
+      fprintf(outfile, "label L%d\n", i->VA->VAL1);
+      break;
+    case TAC_VAR:
+      fprintf(outfile, "var %s\n", ts(i->VA, sa));
+      break;
+    case TAC_BEGINFUNC:
+      fprintf(outfile, "beginfunc\n");
+      break;
+    case TAC_ENDFUNC:
+      fprintf(outfile, "endfunc\n");
+      break;
+    default:
+      
+      /* Don't know what this one is */
+      
+      error("unknown TAC opcode");
+      fprintf(outfile, "unknown %d\n", i->op);
+      break;
+    }
+}
+
+
+void data_out(DATA d) {
+  
+  /* Print data-flow analysis results; space each nibble for readability */
+  
+  int i;
+  
+  fprintf(outfile, "   in\t=");
+  for (i = 0; i < LL; i++) {
+    if (!(i & 3))
+      fprintf(outfile, " ");
+    fprintf(outfile, "%d", (d.in & 1 << i) >> i);
+  }
+  fprintf(outfile, "\n");
+  
+  fprintf(outfile, "   gen\t=");
+  for (i = 0; i < LL; i++) {
+    if (!(i & 3))
+      fprintf(outfile, " ");
+    fprintf(outfile, "%d", (d.gen & 1 << i) >> i);
+  }
+  fprintf(outfile, "\n");
+  
+  fprintf(outfile, "   kill\t=");
+  for (i = 0; i < LL; i++) {
+    if (!(i & 3))
+      fprintf(outfile, " ");
+    fprintf(outfile, "%d", (d.kill & 1 << i) >> i);
+  }
+  fprintf(outfile, "\n");
+  
+  fprintf(outfile, "   out\t=");
+  for (i = 0; i < LL; i++) {
+    if (!(i & 3))
+      fprintf(outfile, " ");
+    fprintf(outfile, "%d", (d.out & 1 << i) >> i);
+  }
+  fprintf(outfile, "\n");
+}
+//E*O*F optimize.c//
+
+exit 0

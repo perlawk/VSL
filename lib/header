@@ -1,0 +1,13 @@
+\
+\      Standard prolog
+\
+\      Modifications:
+\      ==============
+\
+\      26 Jan 96: Jeremy Bennett. Version for 2nd editon publication (unchanged
+\                 from first edition.
+\
+       LDA  L0,R1                        \ Set stack pointer
+       STI  R1,0(R1)                     \ Save on stack
+       LDA  L1,R3                        \ Return address for main routine
+\
