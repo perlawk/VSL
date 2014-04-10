@@ -1,0 +1,4 @@
+
+cd code
+make
+./vsl ../sample/hello.vsl
